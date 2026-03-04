@@ -1,4 +1,4 @@
-from matplotlib.pylab import rand
+# This script uses Statsbomb open data
 from statsbombpy import sb
 import matplotlib.pyplot as plt
 import numpy as np
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     date_of_match = match_info["match_date"].iloc[0] if not match_info.empty else "Unknown"
     competition = match_info["competition"].iloc[0] if not match_info.empty else "Unknown"
     round = match_info["competition_stage"].iloc[0] if not match_info.empty else "Unknown"
-    print(f"Date: {date_of_match}, Competition: {competition}, Round: {round}")
+    print(f"Date: {date_of_match}, Competition: {competition}, Round: {round}. Match ID: {match_id}")
     print(f"{home_team_name} {score['home_score']} - {score['away_score']} {away_team_name}")
 
     time.sleep(2)  # Wait two seconds before continuing
@@ -194,4 +194,3 @@ if __name__ == "__main__":
     away_formation, away_lineup = get_team_lineup(away_team_name)
     plot_formation([home_formation, away_formation], [home_lineup, away_lineup], [home_team_name, away_team_name], score, date_of_match, competition, round)
 
-    
