@@ -11,38 +11,44 @@ import time
 def opening_input():
     # Competition
     competitions = sb.competitions()
-    if input("Type 'list' to see available competitions, or press Enter to continue: ").lower() == 'list':
-        print(competitions[['competition_name']].drop_duplicates())
-    competition = input("Enter the competition name (e.g., Bundesliga, Champions League, Euro): ")
-    league_info = competitions[competitions['competition_name'].str.contains(competition, case=False)]
+    print(competitions[['competition_id', 'competition_name']].drop_duplicates().to_string(index=False))
+    competition = input("Select one competetion from the list and enter the competition id (e.g. 9 for Bundesliga): ")
+    league_info = competitions[competitions['competition_id'] == int(competition)]
     if league_info.empty:
-        print(f"The competition {competition} is not available.")
+        print(f"There's no availible competition with id {competition}.")
         exit()
         return None, None, None, None, None, None, None
     competition_name = league_info.iloc[0]['competition_name']
     league_id = league_info.iloc[0]['competition_id']
 
     # Season
-    if input("Type 'list' to see available seasons for the selected competition, or press Enter to continue: ").lower() == 'list':
-        print(competitions[competitions['competition_id'] == league_id]['season_name'].drop_duplicates())
-    season = input("Enter the season (e.g., 2022/2023 for club games, 2024 for international tournaments): ")
-    season_info = competitions[(competitions['competition_id'] == league_id) & (competitions['season_name'].str.contains(season, case=False))]
+    print("\n")
+    print(f"Available seasons for {competition_name}:")
+    print(competitions[competitions['competition_id'] == league_id][['season_id', 'season_name']].drop_duplicates().to_string(index=False))
+    season = input("Select one available season or year and enter the season id (e.g. 281 for 2023/2024 season): ")
+    season_info = competitions[(competitions['competition_id'] == league_id) & (competitions['season_id'] == int(season))]
     if season_info.empty:
-        print(f"The {season} season is not available for {competition_name}.")
+        print(f"The season with id {season} is not available for {competition_name}.")
         exit()
         return None, None, None, None, None, None, None
     season_name = season_info.iloc[0]['season_name']
     season_id = season_info.iloc[0]['season_id']
 
     # Teams
-    hometeam = input("Enter the home team name: ")
-    awayteam = input("Enter the away team name: ")
     matches = sb.matches(competition_id=league_id, season_id=season_id)
-    match = matches[(matches['home_team'].str.contains(hometeam, case=False)) & (matches['away_team'].str.contains(awayteam, case=False))]
-    if match.empty:
-        match = matches[(matches['home_team'].str.contains(awayteam, case=False)) & (matches['away_team'].str.contains(hometeam, case=False))]
-    home_team_name = match.iloc[0]['home_team'] if not match.empty else None
-    away_team_name = match.iloc[0]['away_team'] if not match.empty else None
+    hometeam = input("Enter the home team name: (or type 'r' for random match): ")
+    awayteam = input("Enter the away team name: (or type 'r' for random match): ")
+    if hometeam == "r" and awayteam == "r":
+        match = matches.sample(1)
+        home_team_name = match.iloc[0]['home_team']
+        away_team_name = match.iloc[0]['away_team']
+        print(f"Randomly selected match: {home_team_name} vs {away_team_name} in {season_name} {competition_name}.")
+    else:
+        match = matches[(matches['home_team'].str.contains(hometeam, case=False)) & (matches['away_team'].str.contains(awayteam, case=False))]
+        if match.empty:
+            match = matches[(matches['home_team'].str.contains(awayteam, case=False)) & (matches['away_team'].str.contains(hometeam, case=False))]
+        home_team_name = match.iloc[0]['home_team'] if not match.empty else None
+        away_team_name = match.iloc[0]['away_team'] if not match.empty else None
     if not match.empty:
         match_id = match.iloc[0]['match_id']
         events = sb.events(match_id=match_id)
@@ -87,7 +93,7 @@ def position_id_to_coordinates(position_id):
     }
     return mapping.get(position_id, None)
 
-def get_team_lineup(team):
+def get_team_lineup(team, events, match_id):
 	formation = (
 		events.loc[(events["team"] == team) & (events["type"] == "Starting XI"), "tactics"]
 		.apply(lambda t: t.get("formation") if isinstance(t, dict) else None)
@@ -147,15 +153,13 @@ def plot_formation(formations, lineups, team_names, score, date, competition, ro
                 plt.text(pos_coords[1], pos_coords[0] - 4, f"{player_first_name}", ha='center', va='center', fontsize=11, zorder=6)
                 plt.text(pos_coords[1], pos_coords[0] - 7, f"{player_last_name}", ha='center', va='center', fontsize=11, zorder=6)
     plt.tight_layout()
-    #plt.savefig('/home/chrischu/sports_analytics/formations.png', dpi=300)
+    #plt.savefig('/home/chrischu/sports_analytics_test/formations.png', dpi=300)
+    print("Close the formation plot to continue.")
     plt.show()
 
-if __name__ == "__main__":
+def main():
     # User input
-    print("Welcome to the Statsbomb Match ID Finder! Made by CYC.")
-    if input("Press Enter to begin, or type 'exit' to exit: ").lower() == 'exit':
-        exit()
-    if input("Type 'r' to receive a random match, or press Enter to continue: ").lower() == 'r':
+    if input("Type 'r' to receive a random match, or press Enter to select a match on your own: ").lower() == 'r':
         competitions = sb.competitions()
         random_competition = competitions.sample(1).iloc[0]
         league_id = random_competition['competition_id']
@@ -188,9 +192,20 @@ if __name__ == "__main__":
     print(f"{home_team_name} {score['home_score']} - {score['away_score']} {away_team_name}")
 
     time.sleep(2)  # Wait two seconds before continuing
-    if input("Type 'lineup' to see the starting lineups, or press Enter to exit: ").lower() != 'lineup':
+    if input("Type 'l' to see the starting lineups, or press Enter to exit: ").lower() != 'l':
         exit()
-    home_formation, home_lineup = get_team_lineup(home_team_name)
-    away_formation, away_lineup = get_team_lineup(away_team_name)
+    home_formation, home_lineup = get_team_lineup(home_team_name, events, match_id)
+    away_formation, away_lineup = get_team_lineup(away_team_name, events, match_id)
     plot_formation([home_formation, away_formation], [home_lineup, away_lineup], [home_team_name, away_team_name], score, date_of_match, competition, round)
 
+    if input("Do you want to see another match? Y/N: ").lower() == 'y':
+        print("\n")
+        main()  # Restart the program
+    else:
+        print("Thank you for using the Statsbomb Match Finder! Goodbye!")
+
+if __name__ == "__main__":
+    print("Welcome to the Statsbomb Match Finder! Made by CYC.")
+    if input("Press Enter to begin, or type 'q' to exit: ").lower() == 'q':
+        exit()
+    main()
