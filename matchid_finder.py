@@ -192,11 +192,10 @@ def main():
     print(f"{home_team_name} {score['home_score']} - {score['away_score']} {away_team_name}")
 
     time.sleep(2)  # Wait two seconds before continuing
-    if input("Type 'l' to see the starting lineups, or press Enter to exit: ").lower() != 'l':
-        exit()
-    home_formation, home_lineup = get_team_lineup(home_team_name, events, match_id)
-    away_formation, away_lineup = get_team_lineup(away_team_name, events, match_id)
-    plot_formation([home_formation, away_formation], [home_lineup, away_lineup], [home_team_name, away_team_name], score, date_of_match, competition, round)
+    if input("Type 'l' to see the starting lineups, or press Enter to continue: ").lower() == 'l':
+        home_formation, home_lineup = get_team_lineup(home_team_name, events, match_id)
+        away_formation, away_lineup = get_team_lineup(away_team_name, events, match_id)
+        plot_formation([home_formation, away_formation], [home_lineup, away_lineup], [home_team_name, away_team_name], score, date_of_match, competition, round)
 
     if input("Do you want to see another match? Y/N: ").lower() == 'y':
         print("\n")
