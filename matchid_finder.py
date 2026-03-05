@@ -36,13 +36,33 @@ def opening_input():
 
     # Teams
     matches = sb.matches(competition_id=league_id, season_id=season_id)
-    hometeam = input("Enter the home team name: (or type 'r' for random match): ")
-    awayteam = input("Enter the away team name: (or type 'r' for random match): ")
+    hometeam = input("Enter the home team name: (or type 'r' for random home team): ")
+    awayteam = input("Enter the away team name: (or type 'r' for random away team): ")
     if hometeam == "r" and awayteam == "r":
         match = matches.sample(1)
         home_team_name = match.iloc[0]['home_team']
         away_team_name = match.iloc[0]['away_team']
         print(f"Randomly selected match: {home_team_name} vs {away_team_name} in {season_name} {competition_name}.")
+    elif hometeam == "r" and awayteam != "r":
+        match = matches[matches['away_team'].str.contains(awayteam, case=False)]
+        if match.empty:
+            print(f"No match found with away team containing '{awayteam}' in {competition_name} {season_name}.")
+            exit()
+            return None, None, None, None, None, None, None
+        match = match.sample(1)
+        home_team_name = match.iloc[0]['home_team']
+        away_team_name = match.iloc[0]['away_team']
+        print(f"Randomly selected match with away team containing '{awayteam}': {home_team_name} vs {away_team_name} in {season_name} {competition_name}.")
+    elif hometeam != "r" and awayteam == "r":
+        match = matches[matches['home_team'].str.contains(hometeam, case=False)]
+        if match.empty:
+            print(f"No match found with home team containing '{hometeam}' in {competition_name} {season_name}.")
+            exit()
+            return None, None, None, None, None, None, None
+        match = match.sample(1)
+        home_team_name = match.iloc[0]['home_team']
+        away_team_name = match.iloc[0]['away_team']
+        print(f"Randomly selected match with home team containing '{hometeam}': {home_team_name} vs {away_team_name} in {season_name} {competition_name}.")
     else:
         match = matches[(matches['home_team'].str.contains(hometeam, case=False)) & (matches['away_team'].str.contains(awayteam, case=False))]
         if match.empty:
