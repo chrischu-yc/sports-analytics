@@ -5,6 +5,10 @@ import numpy as np
 import pandas as pd
 import time
 
+# don't show warnings
+#import warnings
+#warnings.filterwarnings("ignore")
+
 # User input league, season and match to visualize the formations of both teams. 
 # Give out the match id based on the user input of league, season and teams. 
 
@@ -129,51 +133,98 @@ def get_team_lineup(team, events, match_id):
 		start_reason=team_lineup["positions"].apply(
 			lambda p: p[0].get("start_reason") if isinstance(p, list) and len(p) > 0 else None
 		),
+        end_reason=team_lineup["positions"].apply(
+            lambda p: p[0].get("end_reason") if isinstance(p, list) and len(p) > 0 else None
+        ),
 		position=team_lineup["positions"].apply(
 			lambda p: p[0].get("position") if isinstance(p, list) and len(p) > 0 else None
 		),
 		position_id=team_lineup["positions"].apply(
 			lambda p: p[0].get("position_id") if isinstance(p, list) and len(p) > 0 else None
 		),
-	)[["player_name", "player_nickname", "jersey_number", "start_reason", "position", "position_id"]]
+	)[["player_name", "player_nickname", "jersey_number", "start_reason", "end_reason", "position", "position_id"]]
 	lineup["player_nickname"] = lineup["player_nickname"].fillna(team_lineup["player_name"])
 	lineup = lineup.drop(columns=["player_name"], errors="ignore").rename(columns={"player_nickname": "player_name"})
-	lineup = lineup[lineup["start_reason"] == "Starting XI"]
-	lineup = lineup.drop(columns=["start_reason"], errors="ignore")
+	#lineup = lineup[lineup["start_reason"] == "Starting XI"]
+	#lineup = lineup.drop(columns=["start_reason"], errors="ignore")
 	return formation, lineup
 
+def player_name_split(player_name):
+    if isinstance(player_name, str):
+        name_parts = player_name.split()
+        if len(name_parts) == 1:
+            return name_parts[0], ""
+        elif len(name_parts) == 2:
+            return name_parts[0], name_parts[1]
+        else:
+            return name_parts[0], " ".join(name_parts[1:])
+    else:
+        return "Unknown", "Unknown"
+
 def plot_formation(formations, lineups, team_names, score, date, competition, round):
-    plt.figure(figsize=(13, 8))
+    icon_colors = ['red', 'blue']
+    gk_color = ['orange', 'purple']
+
+    # Compute extra vertical space needed for bench
+    max_bench = max(len(lineup[lineup["start_reason"] != "Starting XI"]) for lineup in lineups)
+    bench_rows = (max_bench + 1) // 2
+    bench_space = 7 + bench_rows * 9  # units: gap after separator + rows
+
+    # Grow figure height so pitch (120 units) stays the same visual size
+    fig_height = 8 * (120 + bench_space) / 120
+    plt.figure(figsize=(13, fig_height))
     plt.suptitle(f"{team_names[0]} {score['home_score']} - {score['away_score']} {team_names[1]} - Starting Lineups\n{date} | {competition} | Round: {round}", fontsize=16, fontweight='bold')
+    
     for i, team in enumerate(team_names):
-        plt.subplot(1, 2, i+1)
+        startingxi = lineups[i][lineups[i]["start_reason"] == "Starting XI"]
+        bench = lineups[i][lineups[i]["start_reason"] != "Starting XI"].reset_index(drop=True)
+
+        ax = plt.subplot(1, 2, i + 1)
         plt.title(f"{team} - Formation: {formations[i]}")
         plt.xlim(0, 80)
-        plt.ylim(0, 120)
+        plt.ylim(-bench_space, 120)
         plt.xticks([])
         plt.yticks([])
-        plt.gca().set_facecolor('lightgreen')
-        icon_colors = ['red', 'blue']  # Colors for the two teams
+        ax.set_facecolor('white')
+        ax.axhspan(-3, 120, facecolor='lightgreen', zorder=0)  # pitch background
 
-        for _, player in lineups[i].iterrows():
+        # Starting XI
+        for _, player in startingxi.iterrows():
             pos_coords = position_id_to_coordinates(player["position_id"])
-            player_name_split = player["player_name"].split()
-            if len(player_name_split) == 1:  
-                player_first_name = player_name_split[0]
-                player_last_name = ""
-            if len(player_name_split) == 2:  
-                player_first_name = player["player_name"].split()[0] if isinstance(player["player_name"], str) else "Unknown"
-                player_last_name = player["player_name"].split()[-1] if isinstance(player["player_name"], str) else "Unknown"
-            if len(player_name_split) >= 3:
-                player_first_name = player["player_name"].split()[0] if isinstance(player["player_name"], str) else "Unknown"
-                player_last_name = " ".join(player["player_name"].split()[1:]) if isinstance(player["player_name"], str) else "Unknown"
+            player_first_name, player_last_name = player_name_split(player["player_name"])
             if pos_coords is not None:
-                plt.scatter(pos_coords[1], pos_coords[0], s=400, color=icon_colors[i], edgecolors='black', zorder=5)
+                if player["position_id"] == 1:  # Goalkeeper
+                    plt.scatter(pos_coords[1], pos_coords[0], s=500, color=gk_color[i], edgecolors='black', zorder=5)
+                else: # Outfield player
+                    plt.scatter(pos_coords[1], pos_coords[0], s=400, color=icon_colors[i], edgecolors='black', zorder=5)
                 plt.text(pos_coords[1], pos_coords[0], player["jersey_number"], ha='center', va='center', fontsize=9, fontweight='bold', color='white', zorder=6)
-                plt.text(pos_coords[1], pos_coords[0] - 4, f"{player_first_name}", ha='center', va='center', fontsize=11, zorder=6)
-                plt.text(pos_coords[1], pos_coords[0] - 7, f"{player_last_name}", ha='center', va='center', fontsize=11, zorder=6)
+                plt.text(pos_coords[1], pos_coords[0] - 4.5, f"{player_first_name}", ha='center', va='center', fontsize=11, zorder=6)
+                plt.text(pos_coords[1], pos_coords[0] - 7.5, f"{player_last_name}", ha='center', va='center', fontsize=11, zorder=6)
+                if isinstance(player["end_reason"], str) and "Substitution" in player["end_reason"]:
+                    plt.arrow(pos_coords[1] + 3.5, pos_coords[0] + 4, 0, -4, head_width=1.5, head_length=2, color='tomato', zorder=7)
+        
+        # Bench
+        ax.axhline(y=-3, color='gray', linewidth=1.5, linestyle='--', zorder=4)
+        col_x = [4, 44]
+        for j, (_, player) in enumerate(bench.iterrows()):
+            col = j % 2
+            row = j // 2
+            cx = col_x[col]          # circle centre x
+            ty = -9 - row * 9        # row y-coordinate
+            color = gk_color[i] if player["position"] == "Goalkeeper" else icon_colors[i]
+            plt.scatter(cx, ty, s=300, color=color, edgecolors='black', zorder=5)
+            plt.text(cx, ty, player["jersey_number"], ha='center', va='center', fontsize=8, fontweight='bold', color='white', zorder=6)
+            fn, ln = player_name_split(player["player_name"])
+            if ln == "":
+                plt.text(cx + 6, ty - 0.2, fn, ha='left', va='center', fontsize=9, fontweight='bold', zorder=6)
+            else:
+                plt.text(cx + 6, ty + 1.5, fn, ha='left', va='center', fontsize=9, zorder=6)
+                plt.text(cx + 6, ty - 2.0, ln, ha='left', va='center', fontsize=9, fontweight='bold', zorder=6)
+            # Indicate if player came on as substitute
+            if isinstance(player["start_reason"], str) and "Substitution" in player["start_reason"]:
+                plt.arrow(cx + 4, ty - 3, 0, 4, head_width=1.5, head_length=2, color='limegreen', zorder=7)
     plt.tight_layout()
-    #plt.savefig('/home/chrischu/sports_analytics_test/formations.png', dpi=300)
+    plt.savefig('/home/chrischu/sports_analytics_test/formations.png', dpi=300)
     print("Close the formation plot to continue.")
     plt.show()
 
@@ -211,7 +262,7 @@ def main():
     print(f"Date: {date_of_match}, Competition: {competition}, Round: {round}. Match ID: {match_id}")
     print(f"{home_team_name} {score['home_score']} - {score['away_score']} {away_team_name}")
 
-    time.sleep(2)  # Wait two seconds before continuing
+    time.sleep(1)  # Wait two seconds before continuing
     if input("Type 'l' to see the starting lineups, or press Enter to continue: ").lower() == 'l':
         home_formation, home_lineup = get_team_lineup(home_team_name, events, match_id)
         away_formation, away_lineup = get_team_lineup(away_team_name, events, match_id)
@@ -224,7 +275,8 @@ def main():
         print("Thank you for using the Statsbomb Match Finder! Goodbye!")
 
 if __name__ == "__main__":
-    print("Welcome to the Statsbomb Match Finder! Made by CYC.")
+    print("Welcome to the Statsbomb Match Finder!")
+    print("This tool allows you to find match info based on league, season, and teams, and visualize the starting lineups and formations of both teams.")
     if input("Press Enter to begin, or type 'q' to exit: ").lower() == 'q':
         exit()
     main()
