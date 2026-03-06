@@ -1,0 +1,75 @@
+ID: 9, Season ID: 281, Name: 1. Bundesliga, Season: 2023/2024
+ID: 9, Season ID: 27, Name: 1. Bundesliga, Season: 2015/2016
+ID: 1267, Season ID: 107, Name: African Cup of Nations, Season: 2023
+ID: 16, Season ID: 4, Name: Champions League, Season: 2018/2019
+ID: 16, Season ID: 1, Name: Champions League, Season: 2017/2018
+ID: 16, Season ID: 2, Name: Champions League, Season: 2016/2017
+ID: 16, Season ID: 27, Name: Champions League, Season: 2015/2016
+ID: 16, Season ID: 26, Name: Champions League, Season: 2014/2015
+ID: 16, Season ID: 25, Name: Champions League, Season: 2013/2014
+ID: 16, Season ID: 24, Name: Champions League, Season: 2012/2013
+ID: 16, Season ID: 23, Name: Champions League, Season: 2011/2012
+ID: 16, Season ID: 22, Name: Champions League, Season: 2010/2011
+ID: 16, Season ID: 21, Name: Champions League, Season: 2009/2010
+ID: 16, Season ID: 41, Name: Champions League, Season: 2008/2009
+ID: 16, Season ID: 39, Name: Champions League, Season: 2006/2007
+ID: 16, Season ID: 37, Name: Champions League, Season: 2004/2005
+ID: 16, Season ID: 44, Name: Champions League, Season: 2003/2004
+ID: 16, Season ID: 76, Name: Champions League, Season: 1999/2000
+ID: 16, Season ID: 277, Name: Champions League, Season: 1972/1973
+ID: 16, Season ID: 71, Name: Champions League, Season: 1971/1972
+ID: 16, Season ID: 276, Name: Champions League, Season: 1970/1971
+ID: 223, Season ID: 282, Name: Copa America, Season: 2024
+ID: 87, Season ID: 84, Name: Copa del Rey, Season: 1983/1984
+ID: 87, Season ID: 268, Name: Copa del Rey, Season: 1982/1983
+ID: 87, Season ID: 279, Name: Copa del Rey, Season: 1977/1978
+ID: 37, Season ID: 90, Name: FA Women's Super League, Season: 2020/2021
+ID: 37, Season ID: 42, Name: FA Women's Super League, Season: 2019/2020
+ID: 37, Season ID: 4, Name: FA Women's Super League, Season: 2018/2019
+ID: 1470, Season ID: 274, Name: FIFA U20 World Cup, Season: 1979
+ID: 43, Season ID: 106, Name: FIFA World Cup, Season: 2022
+ID: 43, Season ID: 3, Name: FIFA World Cup, Season: 2018
+ID: 43, Season ID: 55, Name: FIFA World Cup, Season: 1990
+ID: 43, Season ID: 54, Name: FIFA World Cup, Season: 1986
+ID: 43, Season ID: 51, Name: FIFA World Cup, Season: 1974
+ID: 43, Season ID: 272, Name: FIFA World Cup, Season: 1970
+ID: 43, Season ID: 270, Name: FIFA World Cup, Season: 1962
+ID: 43, Season ID: 269, Name: FIFA World Cup, Season: 1958
+ID: 1238, Season ID: 108, Name: Indian Super league, Season: 2021/2022
+ID: 11, Season ID: 90, Name: La Liga, Season: 2020/2021
+ID: 11, Season ID: 42, Name: La Liga, Season: 2019/2020
+ID: 11, Season ID: 4, Name: La Liga, Season: 2018/2019
+ID: 11, Season ID: 1, Name: La Liga, Season: 2017/2018
+ID: 11, Season ID: 2, Name: La Liga, Season: 2016/2017
+ID: 11, Season ID: 27, Name: La Liga, Season: 2015/2016
+ID: 11, Season ID: 26, Name: La Liga, Season: 2014/2015
+ID: 11, Season ID: 25, Name: La Liga, Season: 2013/2014
+ID: 11, Season ID: 24, Name: La Liga, Season: 2012/2013
+ID: 11, Season ID: 23, Name: La Liga, Season: 2011/2012
+ID: 11, Season ID: 22, Name: La Liga, Season: 2010/2011
+ID: 11, Season ID: 21, Name: La Liga, Season: 2009/2010
+ID: 11, Season ID: 41, Name: La Liga, Season: 2008/2009
+ID: 11, Season ID: 40, Name: La Liga, Season: 2007/2008
+ID: 11, Season ID: 39, Name: La Liga, Season: 2006/2007
+ID: 11, Season ID: 38, Name: La Liga, Season: 2005/2006
+ID: 11, Season ID: 37, Name: La Liga, Season: 2004/2005
+ID: 11, Season ID: 278, Name: La Liga, Season: 1973/1974
+ID: 81, Season ID: 48, Name: Liga Profesional, Season: 1997/1998
+ID: 81, Season ID: 275, Name: Liga Profesional, Season: 1981
+ID: 7, Season ID: 235, Name: Ligue 1, Season: 2022/2023
+ID: 7, Season ID: 108, Name: Ligue 1, Season: 2021/2022
+ID: 7, Season ID: 27, Name: Ligue 1, Season: 2015/2016
+ID: 44, Season ID: 107, Name: Major League Soccer, Season: 2023
+ID: 116, Season ID: 68, Name: North American League, Season: 1977
+ID: 49, Season ID: 3, Name: NWSL, Season: 2018
+ID: 2, Season ID: 27, Name: Premier League, Season: 2015/2016
+ID: 2, Season ID: 44, Name: Premier League, Season: 2003/2004
+ID: 12, Season ID: 27, Name: Serie A, Season: 2015/2016
+ID: 12, Season ID: 86, Name: Serie A, Season: 1986/1987
+ID: 55, Season ID: 282, Name: UEFA Euro, Season: 2024
+ID: 55, Season ID: 43, Name: UEFA Euro, Season: 2020
+ID: 35, Season ID: 75, Name: UEFA Europa League, Season: 1988/1989
+ID: 53, Season ID: 315, Name: UEFA Women's Euro, Season: 2025
+ID: 53, Season ID: 106, Name: UEFA Women's Euro, Season: 2022
+ID: 72, Season ID: 107, Name: Women's World Cup, Season: 2023
+ID: 72, Season ID: 30, Name: Women's World Cup, Season: 2019
