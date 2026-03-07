@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sports Analytics — StatsBomb Open Data Match Explorer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-inner">
+      <span class="logo">⚽ StatsBomb Open Data Match Explorer</span>
+      <nav id="breadcrumb"></nav>
+      <button class="btn-random-global" id="btn-random-global" title="Pick a random match from the entire StatsBomb database">🎲 Random Match</button>
+    </div>
+  </header>
+
+  <!-- ── MAIN ───────────────────────────────────────────────────── -->
+  <main id="app">
+
+    <!-- STEP 1: competition + season picker -->
+    <section id="view-picker" class="view active">
+      <h2>Select a Competition &amp; Season</h2>
+      <p class="subtitle">Powered by StatsBomb open data</p>
+
+      <div class="card-grid" id="comp-grid">
+        <div class="loading-spinner"></div>
+      </div>
+    </section>
+
+    <!-- STEP 2: match list -->
+    <section id="view-matches" class="view">
+      <h2 id="matches-title">Matches</h2>
+      <div class="toolbar">
+        <input type="search" id="match-search" placeholder="Filter by team…" />
+        <button class="btn-random" id="btn-random">🎲 Random match</button>
+      </div>
+      <div id="match-list" class="match-list"></div>
+    </section>
+
+    <!-- STEP 3: match detail -->
+    <section id="view-detail" class="view">
+      <div id="match-header" class="match-header"></div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="formations">Formations</button>
+        <button class="tab" data-tab="shotmap">Shot Map</button>
+        <button class="tab" data-tab="stats">Stats</button>
+      </div>
+
+      <!-- Formations tab -->
+      <div id="tab-formations" class="tab-content active">
+        <div class="pitch-row">
+          <div class="pitch-wrap">
+            <h3 id="home-team-title"></h3>
+            <canvas id="canvas-home" width="340" height="510"></canvas>
+          </div>
+          <div class="pitch-wrap">
+            <h3 id="away-team-title"></h3>
+            <canvas id="canvas-away" width="340" height="510"></canvas>
+          </div>
+        </div>
+        <div id="bench-section" class="bench-row"></div>
+      </div>
+
+      <!-- Shot map tab -->
+      <div id="tab-shotmap" class="tab-content">
+        <div class="shotmap-controls">
+          <button class="team-toggle active" id="toggle-home">Home</button>
+          <button class="team-toggle" id="toggle-away">Away</button>
+        </div>
+        <div class="shotmap-wrap">
+          <canvas id="canvas-shotmap" width="500" height="320"></canvas>
+        </div>
+        <div id="shot-legend" class="shot-legend"></div>
+      </div>
+
+      <!-- Stats tab -->
+      <div id="tab-stats" class="tab-content">
+        <div id="stats-table" class="stats-table"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── TOAST ──────────────────────────────────────────────────── -->
+  <div id="toast" class="toast"></div>
+
+  <script src="pitch.js"></script>
+  <script src="shotmap.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
