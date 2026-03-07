@@ -1,5 +1,0 @@
-statsbombpy
-matplotlib
-numpy
-pandas
-streamlit
