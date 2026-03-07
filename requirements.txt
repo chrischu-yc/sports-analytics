@@ -3,3 +3,4 @@ matplotlib
 numpy
 pandas
 streamlit
+altair>=4.0,<5
