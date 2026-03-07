@@ -119,8 +119,12 @@ function dot(ctx, x, y, r, color) {
  */
 function drawFormation(canvasEl, lineup, formation, teamColor, gkColor) {
   const dpr = window.devicePixelRatio || 1;
-  const cssW = canvasEl.clientWidth  || canvasEl.width;
-  const cssH = canvasEl.clientHeight || canvasEl.height;
+  if (!canvasEl.dataset.cssW) {
+    canvasEl.dataset.cssW = canvasEl.clientWidth || canvasEl.width;
+    canvasEl.dataset.cssH = canvasEl.clientHeight || canvasEl.height;
+  }
+  const cssW = +canvasEl.dataset.cssW;
+  const cssH = +canvasEl.dataset.cssH;
 
   // Scale internal canvas resolution to physical pixels
   canvasEl.width  = cssW * dpr;

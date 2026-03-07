@@ -79,12 +79,17 @@ function drawDot(ctx, x, y, r, color) {
  */
 function drawShotmap(canvasEl, shots) {
   const dpr = window.devicePixelRatio || 1;
-  const cssW = canvasEl.clientWidth  || canvasEl.width;
-  const cssH = canvasEl.clientHeight || canvasEl.height;
+  // Cache original CSS size on first call; canvasEl.clientWidth is 0 when hidden
+  // (display:none tab), and canvasEl.width would already be dpr-scaled on 2nd+ calls.
+  if (!canvasEl.dataset.cssW) {
+    canvasEl.dataset.cssW = canvasEl.clientWidth || canvasEl.width;
+    canvasEl.dataset.cssH = canvasEl.clientHeight || canvasEl.height;
+  }
+  const cssW = +canvasEl.dataset.cssW;
+  const cssH = +canvasEl.dataset.cssH;
 
   canvasEl.width  = cssW * dpr;
   canvasEl.height = cssH * dpr;
-  // Lock CSS display size so the element doesn't grow with the buffer
   canvasEl.style.width  = cssW + 'px';
   canvasEl.style.height = cssH + 'px';
 
