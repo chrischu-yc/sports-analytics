@@ -6,8 +6,8 @@ import pandas as pd
 import time
 
 # don't show warnings
-#import warnings
-#warnings.filterwarnings("ignore")
+import warnings
+warnings.filterwarnings("ignore")
 
 # User input league, season and match to visualize the formations of both teams. 
 # Give out the match id based on the user input of league, season and teams. 
@@ -84,10 +84,10 @@ def opening_input():
         exit()
         return None, None, None, None, None, None, None
 
-# position id to on-pitch position mapping
-# Pitch dimensions are 120 x 80 (meters). (0,0) is at top left corner. x increases to the right, y increases downwards.
 dimensions = [120, 80]
 def position_id_to_coordinates(position_id):
+    # position id to on-pitch position mapping
+    # Pitch dimensions are 120 x 80 (meters). (0,0) is at top left corner. x increases to the right, y increases downwards.
     mapping = {
         1: (8, 40),    # GK
         2: (20, 75),   # RB
@@ -161,7 +161,7 @@ def player_name_split(player_name):
     else:
         return "Unknown", "Unknown"
 
-def plot_formation(formations, lineups, team_names, score, date, competition, round):
+def plot_formation(formations, lineups, team_names, score, date, competition, round, events):
     icon_colors = ['red', 'blue']
     gk_color = ['orange', 'purple']
 
@@ -178,6 +178,7 @@ def plot_formation(formations, lineups, team_names, score, date, competition, ro
     for i, team in enumerate(team_names):
         startingxi = lineups[i][lineups[i]["start_reason"] == "Starting XI"]
         bench = lineups[i][lineups[i]["start_reason"] != "Starting XI"].reset_index(drop=True)
+        goal_scorers_list = goal_scorers(events[events["team"] == team])
 
         ax = plt.subplot(1, 2, i + 1)
         plt.title(f"{team} - Formation: {formations[i]}")
@@ -224,9 +225,18 @@ def plot_formation(formations, lineups, team_names, score, date, competition, ro
             if isinstance(player["start_reason"], str) and "Substitution" in player["start_reason"]:
                 plt.arrow(cx + 4, ty - 3, 0, 4, head_width=1.5, head_length=2, color='limegreen', zorder=7)
     plt.tight_layout()
-    plt.savefig('/home/chrischu/sports_analytics_test/formations.png', dpi=300)
+    plt.savefig('/home/chrischu/sports_analytics_test/formations.png', dpi=300) # Where to save the plot
     print("Close the formation plot to continue.")
     plt.show()
+
+def goal_scorers(events):
+    shots = events[events["type"] == "Shot"]
+    goals = shots[shots["shot_outcome"] == "Goal"]
+    scorers = []
+    for _, goal in goals.iterrows():
+        scorer = goal["player"] if isinstance(goal["player"], str) else "Unknown"
+        scorers.append(scorer)
+    return scorers
 
 def main():
     # User input
@@ -262,11 +272,11 @@ def main():
     print(f"Date: {date_of_match}, Competition: {competition}, Round: {round}. Match ID: {match_id}")
     print(f"{home_team_name} {score['home_score']} - {score['away_score']} {away_team_name}")
 
-    time.sleep(1)  # Wait two seconds before continuing
+    time.sleep(1)  # Wait before continuing
     if input("Type 'l' to see the starting lineups, or press Enter to continue: ").lower() == 'l':
         home_formation, home_lineup = get_team_lineup(home_team_name, events, match_id)
         away_formation, away_lineup = get_team_lineup(away_team_name, events, match_id)
-        plot_formation([home_formation, away_formation], [home_lineup, away_lineup], [home_team_name, away_team_name], score, date_of_match, competition, round)
+        plot_formation([home_formation, away_formation], [home_lineup, away_lineup], [home_team_name, away_team_name], score, date_of_match, competition, round, events)
 
     if input("Do you want to see another match? Y/N: ").lower() == 'y':
         print("\n")
