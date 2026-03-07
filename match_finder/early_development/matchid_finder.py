@@ -1,3 +1,4 @@
+# This is where it all started. This script is used to find the match id based on user input of league, season and teams. It also visualizes the starting lineups and formations of both teams.
 # This script uses Statsbomb open data
 from statsbombpy import sb
 import matplotlib.pyplot as plt
