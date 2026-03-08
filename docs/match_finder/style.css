@@ -192,7 +192,9 @@ canvas { display: block; border-radius: 8px; }
 .sub-on-off { color: #fb923c; font-size: .8rem; margin-left: auto; }
 
 /* ── Shot map ────────────────────────────────────────────────────── */
-.shotmap-controls { display: flex; gap: .6rem; margin-bottom: 1rem; }
+.shotmap-row { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; }
+.shotmap-col { display: flex; flex-direction: column; align-items: center; gap: .5rem; }
+.shotmap-label { font-weight: 600; font-size: .95rem; color: var(--text); text-align: center; }
 .team-toggle {
   background: var(--surface); border: 1px solid var(--border);
   color: var(--muted); border-radius: 8px; padding: .45rem 1.1rem;
@@ -200,6 +202,7 @@ canvas { display: block; border-radius: 8px; }
 }
 .team-toggle.active { background: var(--green); border-color: var(--green-lt); color: #fff; }
 .shotmap-wrap { overflow-x: auto; }
+.shotmap-col canvas { display: block; }
 .shot-legend { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: .8rem; font-size: .85rem; }
 .legend-item { display: flex; align-items: center; gap: .4rem; }
 .legend-dot { width: 12px; height: 12px; border-radius: 50%; }

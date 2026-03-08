@@ -67,12 +67,15 @@
 
       <!-- Shot map tab -->
       <div id="tab-shotmap" class="tab-content">
-        <div class="shotmap-controls">
-          <button class="team-toggle active" id="toggle-home">Home</button>
-          <button class="team-toggle" id="toggle-away">Away</button>
-        </div>
-        <div class="shotmap-wrap">
-          <canvas id="canvas-shotmap" width="400" height="300"></canvas>
+        <div class="shotmap-row">
+          <div class="shotmap-col">
+            <div class="shotmap-label" id="label-shotmap-home"></div>
+            <canvas id="canvas-shotmap-home" width="400" height="300"></canvas>
+          </div>
+          <div class="shotmap-col">
+            <div class="shotmap-label" id="label-shotmap-away"></div>
+            <canvas id="canvas-shotmap-away" width="400" height="300"></canvas>
+          </div>
         </div>
         <div id="shot-legend" class="shot-legend"></div>
       </div>

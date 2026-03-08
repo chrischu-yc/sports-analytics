@@ -194,9 +194,9 @@ async function loadMatchDetail(match) {
     <div class="info">${match.match_date} · ${competition_name} · ${season_name}
       · ${match.competition_stage?.name ?? ''} · Stadium: ${match.stadium?.name ?? 'Unknown'}</div>`;
 
-  // Update team toggle labels
-  document.getElementById('toggle-home').textContent = homeName;
-  document.getElementById('toggle-away').textContent = awayName;
+  // Update shotmap labels
+  document.getElementById('label-shotmap-home').textContent = homeName;
+  document.getElementById('label-shotmap-away').textContent = awayName;
   document.getElementById('home-team-title').textContent = homeName;
   document.getElementById('away-team-title').textContent = awayName;
 
@@ -204,7 +204,7 @@ async function loadMatchDetail(match) {
   showTab('formations');
 
   // Loading indicators on canvases
-  ['canvas-home', 'canvas-away', 'canvas-shotmap'].forEach(id => {
+  ['canvas-home', 'canvas-away', 'canvas-shotmap-home', 'canvas-shotmap-away'].forEach(id => {
     const c = document.getElementById(id);
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, c.width, c.height);
@@ -229,11 +229,9 @@ async function loadMatchDetail(match) {
     renderFormations(homeName, awayName);
     renderBench(homeName, awayName);
     renderStats(homeName, awayName);
-    renderShotmap(homeName);   // default: home team
+    renderShotmap();
 
-    state.shotTeam = 'home';
-    document.getElementById('toggle-home').classList.add('active');
-    document.getElementById('toggle-away').classList.remove('active');
+
 
   } catch (err) {
     toast(`Error loading match data: ${err.message}`, 5000);
@@ -399,18 +397,22 @@ function renderStats(homeName, awayName) {
 }
 
 // ── Shot map ─────────────────────────────────────────────────────────
-function renderShotmap(teamName) {
-  const shots = state.events.filter(
+function renderShotmap() {
+  const homeName = state.selectedMatch.home_team.home_team_name ?? state.selectedMatch.home_team;
+  const awayName = state.selectedMatch.away_team.away_team_name ?? state.selectedMatch.away_team;
+
+  const getShots = teamName => state.events.filter(
     e => e.team?.name === teamName && e.type?.id === 16
   ).map(e => ({
-    location:              e.location,
-    shot_outcome:          e.shot?.outcome?.name,
-    shot_statsbomb_xg:     e.shot?.statsbomb_xg,
-    player:                e.player?.name,
-    minute:                e.minute,
+    location:          e.location,
+    shot_outcome:      e.shot?.outcome?.name,
+    shot_statsbomb_xg: e.shot?.statsbomb_xg,
+    player:            e.player?.name,
+    minute:            e.minute,
   }));
 
-  const legendEntries = drawShotmap(document.getElementById('canvas-shotmap'), shots);
+  const legendEntries = drawShotmap(document.getElementById('canvas-shotmap-home'), getShots(homeName));
+  drawShotmap(document.getElementById('canvas-shotmap-away'), getShots(awayName));
 
   const legend = document.getElementById('shot-legend');
   legend.innerHTML = legendEntries.map(([label, style]) =>
@@ -422,22 +424,6 @@ function renderShotmap(teamName) {
     Circle size = xG
   </span>`;
 }
-
-// Shot map team toggle
-document.getElementById('toggle-home').addEventListener('click', () => {
-  const homeName = state.selectedMatch.home_team.home_team_name ?? state.selectedMatch.home_team;
-  state.shotTeam = 'home';
-  document.getElementById('toggle-home').classList.add('active');
-  document.getElementById('toggle-away').classList.remove('active');
-  renderShotmap(homeName);
-});
-document.getElementById('toggle-away').addEventListener('click', () => {
-  const awayName = state.selectedMatch.away_team.away_team_name ?? state.selectedMatch.away_team;
-  state.shotTeam = 'away';
-  document.getElementById('toggle-away').classList.add('active');
-  document.getElementById('toggle-home').classList.remove('active');
-  renderShotmap(awayName);
-});
 
 // ── Tab switching ────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(btn => {
