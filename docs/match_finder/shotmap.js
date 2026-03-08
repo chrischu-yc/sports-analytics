@@ -1,65 +1,78 @@
 /**
- * shotmap.js — draws a horizontal shot map on a <canvas>.
- * Pitch: 120 × 80 units, drawn landscape.
+ * shotmap.js — draws a half-pitch shot map on a <canvas>.
+ * Only the attacking half is shown (pitch x: 60→120), rotated so the goal is at top.
+ *
+ * Coordinate mapping:
+ *   canvas x = pitch y * (cw / 80)   — left sideline → right sideline
+ *   canvas y = (120 - pitch x) * (ch / 60) — goal (x=120) → top, centre (x=60) → bottom
  */
 
-const SM_LEN = 120;
-const SM_WID = 80;
+const SM_LEN      = 120;  // full pitch length
+const SM_WID      = 80;   // pitch width
+const SM_HALF_X   = 60;   // length of the half shown
 
 function drawShotmapPitch(ctx, cw, ch) {
-  const sx = cw / SM_LEN;
-  const sy = ch / SM_WID;
-  const px = v => v * sx;
-  const py = v => v * sy;
+  // sx: pitch y-units → canvas x-pixels
+  // sy: pitch x-units from centre → canvas y-pixels
+  const sx = cw / SM_WID;
+  const sy = ch / SM_HALF_X;
 
+  // helpers
+  const cpx = py => py * sx;              // pitch y  → canvas x
+  const cpy = px => (SM_LEN - px) * sy;  // pitch x  → canvas y (goal at top)
+
+  // Background
   ctx.fillStyle = '#2d5a27';
   ctx.fillRect(0, 0, cw, ch);
 
-  // Alternating stripes
-  for (let i = 0; i < 6; i++) {
+  // Alternating horizontal stripes (goal → centre line)
+  for (let i = 0; i < 4; i++) {
     if (i % 2 === 0) {
       ctx.fillStyle = 'rgba(0,0,0,0.07)';
-      ctx.fillRect(i * cw / 6, 0, cw / 6, ch);
+      ctx.fillRect(0, i * ch / 4, cw, ch / 4);
     }
   }
 
   ctx.strokeStyle = 'rgba(255,255,255,0.75)';
   ctx.lineWidth = 1.5;
 
-  // Outline
+  // Border (all 4 sides; bottom edge = centre line)
   ctx.strokeRect(0, 0, cw, ch);
 
-  // Halfway
-  ctx.beginPath(); ctx.moveTo(px(60), 0); ctx.lineTo(px(60), ch); ctx.stroke();
+  // Penalty area (x: 102→120, y: 18→62)
+  smRect(ctx, cpx(18), cpy(120), cpx(62) - cpx(18), cpy(102) - cpy(120));
+  // 6-yard box (x: 114→120, y: 30→50)
+  smRect(ctx, cpx(30), cpy(120), cpx(50) - cpx(30), cpy(114) - cpy(120));
 
-  // Centre circle
+  // Penalty spot
+  drawDot(ctx, cpx(40), cpy(108), 3, 'white');
+
+  // Penalty arc — show only the part outside the penalty area
+  ctx.save();
   ctx.beginPath();
-  ctx.arc(px(60), py(40), 10 * sy, 0, Math.PI * 2);
+  ctx.rect(0, cpy(102), cw, ch - cpy(102));
+  ctx.clip();
+  ctx.beginPath();
+  ctx.arc(cpx(40), cpy(108), 10 * sx, 0, Math.PI * 2);
   ctx.stroke();
-  drawDot(ctx, px(60), py(40), 3, 'white');
-
-  // Left penalty area
-  smRect(ctx, px(0), py(18), px(18), py(62) - py(18));
-  smRect(ctx, px(0), py(30), px(6), py(50) - py(30));
-  drawDot(ctx, px(12), py(40), 3, 'white');
-  // Left D
-  ctx.save();
-  ctx.beginPath(); ctx.rect(px(18), 0, cw, ch); ctx.clip();
-  ctx.beginPath(); ctx.arc(px(12), py(40), 10 * sy, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();
 
-  // Right penalty area
-  smRect(ctx, px(102), py(18), px(120) - px(102), py(62) - py(18));
-  smRect(ctx, px(114), py(30), px(120) - px(114), py(50) - py(30));
-  drawDot(ctx, px(108), py(40), 3, 'white');
+  // Centre arc — show only the top sliver visible at the bottom of canvas
   ctx.save();
-  ctx.beginPath(); ctx.rect(0, 0, px(102), ch); ctx.clip();
-  ctx.beginPath(); ctx.arc(px(108), py(40), 10 * sy, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath();
+  ctx.rect(0, 0, cw, ch);
+  ctx.clip();
+  ctx.beginPath();
+  ctx.arc(cpx(40), cpy(60), 10 * sx, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 
-  // Goals
-  smRect(ctx, px(-2), py(36), px(2) - px(-2), py(44) - py(36));
-  smRect(ctx, px(120), py(36), px(2), py(44) - py(36));
+  // Goal (extends above top edge: x=120, y: 36→44)
+  const goalX1 = cpx(36), goalX2 = cpx(44);
+  const goalDepth = Math.round(5 * sx);
+  ctx.fillStyle = 'rgba(120,120,120,0.45)';
+  ctx.fillRect(goalX1, -goalDepth, goalX2 - goalX1, goalDepth);
+  smRect(ctx,  goalX1, -goalDepth, goalX2 - goalX1, goalDepth);
 }
 
 function smRect(ctx, x, y, w, h) {
@@ -98,19 +111,19 @@ function drawShotmap(canvasEl, shots) {
 
   const cw = cssW;
   const ch = cssH;
-  const sx = cw / SM_LEN;
-  const sy = ch / SM_WID;
+  const sx = cw / SM_WID;       // pitch y → canvas x
+  const sy = ch / SM_HALF_X;   // pitch x (from centre) → canvas y
 
   ctx.clearRect(0, 0, cw, ch);
   drawShotmapPitch(ctx, cw, ch);
 
   // Legend categories
   const categories = {
-    'Goal':          { color: '#facc15', stroke: '#fff' },
-    'Saved':    { color: '#3b82f6', stroke: '#93c5fd' },
-    'Off Target':    { color: '#ef4444', stroke: '#fca5a5' },
-    'Blocked':       { color: '#94a3b8', stroke: '#cbd5e1' },
-    'Post':          { color: '#fb923c', stroke: '#fdba74' },
+    'Goal':       { color: '#facc15', stroke: '#fff' },
+    'Saved':      { color: '#3b82f6', stroke: '#93c5fd' },
+    'Off Target': { color: '#ef4444', stroke: '#fca5a5' },
+    'Blocked':    { color: '#94a3b8', stroke: '#cbd5e1' },
+    'Post':       { color: '#fb923c', stroke: '#fdba74' },
   };
 
   const getCategory = outcome => {
@@ -125,8 +138,9 @@ function drawShotmap(canvasEl, shots) {
   for (const shot of shots) {
     if (!shot.location) continue;
     const [lx, ly] = shot.location;
-    const cx = lx * sx;
-    const cy = ly * sy;
+    // Map pitch coords to rotated half-pitch canvas coords
+    const cx = ly * sx;              // pitch y  → canvas x
+    const cy = (SM_LEN - lx) * sy;  // pitch x  → canvas y (goal=top)
     const xg = shot.shot_statsbomb_xg || 0;
     const r = Math.max(5, Math.min(18, 5 + xg * 30));
     const cat = getCategory(shot.shot_outcome);
