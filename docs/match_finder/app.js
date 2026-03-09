@@ -306,6 +306,12 @@ function renderBench(homeName, awayName) {
     const lineup = state.lineups[team] ?? [];
     const bench  = lineup.filter(p => p.start_reason !== 'Starting XI');
 
+    // Cross-reference substitution events for reliability
+    // Type 19 = Substitution; e.player = subbed OFF, e.substitution.replacement = subbed ON
+    const teamSubs = state.events.filter(e => e.type?.id === 19 && e.team?.name === team);
+    const subbedOnSet  = new Set(teamSubs.map(e => e.substitution?.replacement?.name));
+    const subbedOffSet = new Set(teamSubs.map(e => e.player?.name));
+
     const panel = document.createElement('div');
     panel.className = 'bench-panel';
     panel.innerHTML = `<h4>${team} — Substitutes</h4>`;
@@ -314,8 +320,8 @@ function renderBench(homeName, awayName) {
       panel.innerHTML += '<p style="color:var(--muted);font-size:.85rem">No data</p>';
     } else {
       for (const p of bench) {
-        const subbedOn  = typeof p.start_reason === 'string' && p.start_reason.includes('Substitution');
-        const subbedOff = typeof p.end_reason   === 'string' && p.end_reason.includes('Substitution');
+        const subbedOn  = subbedOnSet.has(p.real_name);
+        const subbedOff = subbedOffSet.has(p.real_name);
         const row = document.createElement('div');
         row.className = 'bench-player';
 
@@ -400,10 +406,21 @@ function renderStats(homeName, awayName) {
     }).join('')}`;
 }
 
+// ── Nickname lookup (real_name → display player_name) ───────────────
+function buildNicknameLookup() {
+  const map = {};
+  for (const players of Object.values(state.lineups)) {
+    for (const p of players) map[p.real_name] = p.player_name;
+  }
+  return map;
+}
+
 // ── Shot map ─────────────────────────────────────────────────────────
 function renderShotmap() {
   const homeName = state.selectedMatch.home_team.home_team_name ?? state.selectedMatch.home_team;
   const awayName = state.selectedMatch.away_team.away_team_name ?? state.selectedMatch.away_team;
+
+  const nicknames = buildNicknameLookup();
 
   const getShots = teamName => state.events.filter(
     e => e.team?.name === teamName && e.type?.id === 16
@@ -411,12 +428,22 @@ function renderShotmap() {
     location:          e.location,
     shot_outcome:      e.shot?.outcome?.name,
     shot_statsbomb_xg: e.shot?.statsbomb_xg,
-    player:            e.player?.name,
+    player:            nicknames[e.player?.name] ?? e.player?.name,
     minute:            e.minute,
   }));
 
-  const legendEntries = drawShotmap(document.getElementById('canvas-shotmap-home'), getShots(homeName));
-  drawShotmap(document.getElementById('canvas-shotmap-away'), getShots(awayName));
+  const attach = (canvasEl, result) => {
+    canvasEl._shotHits = result.hits;
+  };
+
+  const homeCanvas = document.getElementById('canvas-shotmap-home');
+  const awayCanvas = document.getElementById('canvas-shotmap-away');
+  const homeResult = drawShotmap(homeCanvas, getShots(homeName));
+  const awayResult = drawShotmap(awayCanvas, getShots(awayName));
+  attach(homeCanvas, homeResult);
+  attach(awayCanvas, awayResult);
+
+  const legendEntries = homeResult.legendEntries;
 
   const legend = document.getElementById('shot-legend');
   legend.innerHTML = legendEntries.map(([label, style]) =>
@@ -429,6 +456,54 @@ function renderShotmap() {
   </span>`;
 }
 
+// ── Shot tooltip ─────────────────────────────────────────────────────
+(function setupShotTooltip() {
+  const tooltip = document.getElementById('shot-tooltip');
+
+  const onCanvasClick = (e) => {
+    const canvas = e.currentTarget;
+    const hits = canvas._shotHits;
+    if (!hits) return;
+
+    const rect  = canvas.getBoundingClientRect();
+    const mx    = e.clientX - rect.left;
+    const my    = e.clientY - rect.top;
+
+    // Find the topmost (last drawn) shot whose circle contains the click
+    let hit = null;
+    for (let i = hits.length - 1; i >= 0; i--) {
+      const { cx, cy, r } = hits[i];
+      const dist = Math.sqrt((mx - cx) ** 2 + (my - cy) ** 2);
+      if (dist <= r + 2) { hit = hits[i]; break; }
+    }
+
+    if (!hit) { tooltip.classList.remove('visible'); return; }
+
+    const s = hit.shot;
+    const xg = s.shot_statsbomb_xg ? ` · xG ${s.shot_statsbomb_xg.toFixed(2)}` : '';
+    const outcome = s.shot_outcome ? ` · ${s.shot_outcome}` : '';
+    tooltip.textContent = `${s.player}, ${s.minute}'${outcome}${xg}`;
+
+    // Position tooltip near the click, keeping it on-screen
+    const scrollX = window.scrollX, scrollY = window.scrollY;
+    let tx = e.clientX + scrollX + 12;
+    let ty = e.clientY + scrollY - 36;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top  = ty + 'px';
+    tooltip.classList.add('visible');
+  };
+
+  // Dismiss on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#canvas-shotmap-home, #canvas-shotmap-away')) {
+      tooltip.classList.remove('visible');
+    }
+  });
+
+  document.getElementById('canvas-shotmap-home').addEventListener('click', onCanvasClick);
+  document.getElementById('canvas-shotmap-away').addEventListener('click', onCanvasClick);
+})();
+
 // ── Tab switching ────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
@@ -437,6 +512,8 @@ document.querySelectorAll('.tab').forEach(btn => {
 function initPassmapDropdowns(homeName, awayName) {
   document.getElementById('label-passmap-home').textContent = homeName;
   document.getElementById('label-passmap-away').textContent = awayName;
+
+  const nicknames = buildNicknameLookup();
 
   // Build set of players who actually made a pass in the match
   const passers = new Set(state.events
@@ -501,10 +578,11 @@ function renderPassmap() {
     const acc = total ? (successful / total * 100).toFixed(1) : '—';
 
     const playerFilter = isAllSelected(selectId) ? [] : selectedValues(selectId);
+    const nicknames = buildNicknameLookup();
     const label = playerFilter.length === 0
       ? 'Team'
       : playerFilter.length === 1
-        ? playerFilter[0].split(' ').pop()  // last name for single player
+        ? (nicknames[playerFilter[0]] ?? playerFilter[0].split(' ').pop())
         : `${playerFilter.length} players`;
 
     document.getElementById(statsId).innerHTML =

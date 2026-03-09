@@ -117,6 +117,8 @@ function drawShotmap(canvasEl, shots) {
   ctx.clearRect(0, 0, cw, ch);
   drawShotmapPitch(ctx, cw, ch);
 
+  const hits = [];  // hit-test records: { cx, cy, r, shot }
+
   // Legend categories
   const categories = {
     'Goal':       { color: '#facc15', stroke: '#fff' },
@@ -163,7 +165,9 @@ function drawShotmap(canvasEl, shots) {
       ctx.textBaseline = 'middle';
       ctx.fillText('★', cx, cy);
     }
+
+    hits.push({ cx, cy, r, shot });
   }
 
-  return Object.entries(categories);
+  return { legendEntries: Object.entries(categories), hits };
 }
