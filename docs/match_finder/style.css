@@ -207,6 +207,30 @@ canvas { display: block; border-radius: 8px; }
 .legend-item { display: flex; align-items: center; gap: .4rem; }
 .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
 
+/* ── Pass map ────────────────────────────────────────────────────── */
+.passmap-row { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; }
+.passmap-col { display: flex; flex-direction: column; align-items: center; gap: .5rem; }
+.passmap-label { font-weight: 600; font-size: .95rem; color: var(--text); text-align: center; }
+.passmap-select-wrap { display: flex; flex-direction: column; align-items: center; gap: .25rem; }
+.passmap-select-wrap select {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: .35rem .5rem; font-size: .82rem;
+  min-width: 200px; max-width: 480px; width: 100%;
+  scrollbar-width: thin;
+}
+.passmap-select-wrap select option { padding: .2rem .4rem; }
+.passmap-select-wrap select option:checked { background: var(--green); color: #fff; }
+.passmap-hint { font-size: .72rem; color: var(--muted); margin: 0; text-align: center; }
+.passmap-col canvas { display: block; }
+.passmap-stats {
+  font-size: .85rem; color: var(--text);
+  text-align: center; padding: .35rem .5rem;
+  background: var(--surface); border-radius: 8px;
+  border: 1px solid var(--border); min-width: 200px;
+}
+.passmap-legend { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: .8rem; font-size: .85rem; }
+
 /* ── Stats ───────────────────────────────────────────────────────── */
 .stats-table { background: var(--card); border-radius: 12px; overflow: hidden; }
 .stat-row {

@@ -47,6 +47,7 @@
       <div class="tabs">
         <button class="tab active" data-tab="formations">Formations</button>
         <button class="tab" data-tab="shotmap">Shot Map</button>
+        <button class="tab" data-tab="passmap">Pass Map</button>
         <button class="tab" data-tab="stats">Stats</button>
       </div>
 
@@ -84,6 +85,35 @@
       <div id="tab-stats" class="tab-content">
         <div id="stats-table" class="stats-table"></div>
       </div>
+
+      <!-- Pass map tab -->
+      <div id="tab-passmap" class="tab-content">
+        <div class="passmap-row">
+          <div class="passmap-col">
+            <div class="passmap-label" id="label-passmap-home"></div>
+            <div class="passmap-select-wrap">
+              <select id="select-passmap-home" multiple size="7"></select>
+              <p class="passmap-hint">Hold Ctrl / ⌘ to multi-select &middot; No selection = all passes</p>
+            </div>
+            <canvas id="canvas-passmap-home" width="480" height="320"></canvas>
+            <div id="passmap-stats-home" class="passmap-stats"></div>
+          </div>
+          <div class="passmap-col">
+            <div class="passmap-label" id="label-passmap-away"></div>
+            <div class="passmap-select-wrap">
+              <select id="select-passmap-away" multiple size="7"></select>
+              <p class="passmap-hint">Hold Ctrl / ⌘ to multi-select &middot; No selection = all passes</p>
+            </div>
+            <canvas id="canvas-passmap-away" width="480" height="320"></canvas>
+            <div id="passmap-stats-away" class="passmap-stats"></div>
+          </div>
+        </div>
+        <div class="passmap-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#e53e3ecc"></span>Successful (home)</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#60a5facc"></span>Successful (away)</span>
+          <span class="legend-item"><span class="legend-dot" style="background:rgba(160,160,160,0.55)"></span>Unsuccessful</span>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -93,6 +123,7 @@
 
   <script src="pitch.js"></script>
   <script src="shotmap.js"></script>
+  <script src="passmap.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

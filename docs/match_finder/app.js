@@ -204,7 +204,8 @@ async function loadMatchDetail(match) {
   showTab('formations');
 
   // Loading indicators on canvases
-  ['canvas-home', 'canvas-away', 'canvas-shotmap-home', 'canvas-shotmap-away'].forEach(id => {
+  ['canvas-home', 'canvas-away', 'canvas-shotmap-home', 'canvas-shotmap-away',
+   'canvas-passmap-home', 'canvas-passmap-away'].forEach(id => {
     const c = document.getElementById(id);
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, c.width, c.height);
@@ -230,6 +231,8 @@ async function loadMatchDetail(match) {
     renderBench(homeName, awayName);
     renderStats(homeName, awayName);
     renderShotmap();
+    initPassmapDropdowns(homeName, awayName);
+    renderPassmap();
 
 
 
@@ -273,7 +276,7 @@ function getFormation(teamName) {
   return f ? formatFormation(f) : null;
 }
 
-const TEAM_COLORS  = ['#e53e3e', '#2b6cb0'];   // home=red, away=blue
+const TEAM_COLORS  = ['#e53e3e', '#60a5fa'];   // home=red, away=bright-blue
 const GK_COLORS    = ['#d97706', '#7c3aed'];   // home=amber, away=purple
 
 function renderFormations(homeName, awayName) {
@@ -429,7 +432,103 @@ function renderShotmap() {
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
+// ── Pass map ─────────────────────────────────────────────────────────
+function initPassmapDropdowns(homeName, awayName) {
+  document.getElementById('label-passmap-home').textContent = homeName;
+  document.getElementById('label-passmap-away').textContent = awayName;
 
+  // Build set of players who actually made a pass in the match
+  const passers = new Set(state.events
+    .filter(e => e.type?.id === 30)
+    .map(e => e.player?.name));
+
+  const populate = (selectId, teamName) => {
+    const players = (state.lineups[teamName] ?? [])
+      .filter(p => passers.has(p.player_name));
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = '';
+    // "All players" sentinel option (value='' means no filter)
+    const allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = '— All players —';
+    sel.appendChild(allOpt);
+    for (const p of players) {
+      const opt = document.createElement('option');
+      opt.value = p.player_name;
+      opt.textContent = `${p.jersey_number}. ${p.player_name}`;
+      sel.appendChild(opt);
+    }
+  };
+
+  populate('select-passmap-home', homeName);
+  populate('select-passmap-away', awayName);
+}
+
+function renderPassmap() {
+  const homeName = state.selectedMatch.home_team.home_team_name ?? state.selectedMatch.home_team;
+  const awayName = state.selectedMatch.away_team.away_team_name ?? state.selectedMatch.away_team;
+
+  // Empty-string sentinel means "All players"; filter it out from player names
+  const selectedValues = id => {
+    const vals = Array.from(document.getElementById(id).selectedOptions).map(o => o.value);
+    return vals.filter(v => v !== '');
+  };
+
+  const isAllSelected = id => {
+    const opts = Array.from(document.getElementById(id).selectedOptions);
+    return opts.length === 0 || opts.some(o => o.value === '');
+  };
+
+  const getPasses = (teamName, selectId) => {
+    const playerFilter = isAllSelected(selectId) ? [] : selectedValues(selectId);
+    return state.events
+    .filter(e =>
+      e.type?.id === 30 &&
+      e.team?.name === teamName &&
+      (playerFilter.length === 0 || playerFilter.includes(e.player?.name))
+    )
+    .map(e => ({
+      location:     e.location,
+      end_location: e.pass?.end_location,
+      outcome:      e.pass?.outcome?.name ?? null,
+    }));
+  };
+
+  const renderPassStats = (statsId, passes, selectId, color) => {
+    const total = passes.length;
+    const successful = passes.filter(p => !p.outcome).length;
+    const acc = total ? (successful / total * 100).toFixed(1) : '—';
+
+    const playerFilter = isAllSelected(selectId) ? [] : selectedValues(selectId);
+    const label = playerFilter.length === 0
+      ? 'Team'
+      : playerFilter.length === 1
+        ? playerFilter[0].split(' ').pop()  // last name for single player
+        : `${playerFilter.length} players`;
+
+    document.getElementById(statsId).innerHTML =
+      `<span style="color:${color};font-weight:600">${label}:</span> ` +
+      `${successful} / ${total} passes &nbsp;·&nbsp; ` +
+      `<span style="color:${color};font-weight:700">${acc}%</span> accuracy`;
+  };
+
+  drawPassmap(
+    document.getElementById('canvas-passmap-home'),
+    getPasses(homeName, 'select-passmap-home'),
+    TEAM_COLORS[0]
+  );
+  renderPassStats('passmap-stats-home', getPasses(homeName, 'select-passmap-home'), 'select-passmap-home', TEAM_COLORS[0]);
+
+  drawPassmap(
+    document.getElementById('canvas-passmap-away'),
+    getPasses(awayName, 'select-passmap-away'),
+    TEAM_COLORS[1]
+  );
+  renderPassStats('passmap-stats-away', getPasses(awayName, 'select-passmap-away'), 'select-passmap-away', TEAM_COLORS[1]);
+}
+
+document.getElementById('select-passmap-home').addEventListener('change', renderPassmap);
+document.getElementById('select-passmap-away').addEventListener('change', renderPassmap);
 // ── Global random match (entire database) ──────────────────────────
 async function loadRandomFromEntireDB() {
   const btn = document.getElementById('btn-random-global');

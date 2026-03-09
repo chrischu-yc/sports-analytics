@@ -80,6 +80,7 @@ def generate_passmap(match_id, team_name, player_name):
         end_x, end_y = pass_event['pass_end_location']
         ax.arrow(start_x, start_y, end_x - start_x, end_y - start_y,
                  head_width=1, head_length=1, fc='blue', ec='blue', length_includes_head=True)
+        ax.scatter(start_x, start_y, c='blue', s=50, zorder=5, alpha=0.2)
 
     ax.set_title(f'Pass Map for {player_name}', fontsize=16, color='white')
     fig.patch.set_facecolor('#69ae5b')
