@@ -256,6 +256,7 @@ function buildLineups(lineupsData) {
       const posL = positions[positions.length - 1] ?? {}; // last position = how they left
       return {
         player_name:   p.player_nickname || p.player_name,
+        real_name:     p.player_name,   // always the real name, used to match events
         jersey_number: p.jersey_number,
         position:      pos0.position    ?? null,
         position_id:   pos0.position_id ?? null,
@@ -444,7 +445,7 @@ function initPassmapDropdowns(homeName, awayName) {
 
   const populate = (selectId, teamName) => {
     const players = (state.lineups[teamName] ?? [])
-      .filter(p => passers.has(p.player_name));
+      .filter(p => passers.has(p.real_name));
     const sel = document.getElementById(selectId);
     sel.innerHTML = '';
     // "All players" sentinel option (value='' means no filter)
@@ -454,7 +455,7 @@ function initPassmapDropdowns(homeName, awayName) {
     sel.appendChild(allOpt);
     for (const p of players) {
       const opt = document.createElement('option');
-      opt.value = p.player_name;
+      opt.value = p.real_name;  // match against event player names
       opt.textContent = `${p.jersey_number}. ${p.player_name}`;
       sel.appendChild(opt);
     }
