@@ -7,7 +7,7 @@ PITCH_LENGTH = 120
 PITCH_WIDTH = 80
 
 def draw_pitch(ax):
-    ax.set_facecolor('#4a7c40')
+    ax.set_facecolor("#69ae5b")
 
     # Pitch outline
     ax.add_patch(plt.Rectangle((0, 0), PITCH_LENGTH, PITCH_WIDTH,
@@ -58,14 +58,38 @@ def generate_shotmap(match_id, team_name):
     )
 
     ax.set_title(f'Shot Map for {team_name}', fontsize=16, color='white')
-    fig.patch.set_facecolor('#2d5a27')
+    fig.patch.set_facecolor('#69ae5b')
     ax.set_xlim(-5, PITCH_LENGTH + 5)
     ax.set_ylim(-5, PITCH_WIDTH + 5)
     ax.set_aspect('equal')
     ax.axis('off')
-    ax.legend(facecolor='#2d5a27', labelcolor='white')
+    ax.legend(facecolor='#69ae5b', labelcolor='white')
     plt.tight_layout()
     plt.show()
 
+def generate_passmap(match_id, team_name, player_name):
+    events = sb.events(match_id=match_id)
+    passes = events[events['type'] == 'Pass']
+    player_passes = passes[passes['player'] == player_name]
 
-generate_shotmap(7577, 'Iran')
+    fig, ax = plt.subplots(figsize=(14, 10))
+    draw_pitch(ax)
+
+    for _, pass_event in player_passes.iterrows():
+        start_x, start_y = pass_event['location']
+        end_x, end_y = pass_event['pass_end_location']
+        ax.arrow(start_x, start_y, end_x - start_x, end_y - start_y,
+                 head_width=1, head_length=1, fc='blue', ec='blue', length_includes_head=True)
+
+    ax.set_title(f'Pass Map for {player_name}', fontsize=16, color='white')
+    fig.patch.set_facecolor('#69ae5b')
+    ax.set_xlim(-5, PITCH_LENGTH + 5)
+    ax.set_ylim(-5, PITCH_WIDTH + 5)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+    
+
+generate_shotmap(3754146, 'Leicester City')
+generate_passmap(3754146, 'Leicester City', 'Jamie Vardy')
