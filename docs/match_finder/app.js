@@ -63,7 +63,7 @@ function formatFormation(f) {
 // ── Step 1: Load competitions ────────────────────────────────────────
 async function loadCompetitions() {
   showView('view-picker');
-  setBreadcrumb([{ label: 'Competitions' }]);
+  setBreadcrumb([{ label: 'Home' }]);
 
   const grid = document.getElementById('comp-grid');
   grid.innerHTML = '<div class="loading-spinner"></div>';
@@ -205,7 +205,8 @@ async function loadMatchDetail(match) {
 
   // Loading indicators on canvases
   ['canvas-home', 'canvas-away', 'canvas-shotmap-home', 'canvas-shotmap-away',
-   'canvas-passmap-home', 'canvas-passmap-away'].forEach(id => {
+   'canvas-passmap-home', 'canvas-passmap-away',
+   'canvas-passnet-home', 'canvas-passnet-away'].forEach(id => {
     const c = document.getElementById(id);
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, c.width, c.height);
@@ -233,6 +234,7 @@ async function loadMatchDetail(match) {
     renderShotmap();
     initPassmapDropdowns(homeName, awayName);
     renderPassmap();
+    renderPassNetworks(homeName, awayName);
 
 
 
@@ -504,11 +506,121 @@ function renderShotmap() {
   document.getElementById('canvas-shotmap-away').addEventListener('click', onCanvasClick);
 })();
 
+// ── Pass network node tooltip ─────────────────────────────────────────
+(function setupPassNetTooltip() {
+  const tooltip = document.getElementById('passnet-tooltip');
+
+  const onCanvasClick = (e) => {
+    const canvas = e.currentTarget;
+    const result = canvas._passNetResult;
+    if (!result || !result.hits) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // Find the smallest circle containing the click (handles overlapping nodes —
+    // the innermost/smallest hit is the most precisely targeted node).
+    let hit = null;
+    for (const h of result.hits) {
+      const dist = Math.sqrt((mx - h.cx) ** 2 + (my - h.cy) ** 2);
+      if (dist <= h.r + 4 && (!hit || h.r < hit.r)) hit = h;
+    }
+
+    if (!hit) { tooltip.classList.remove('visible'); return; }
+
+    const node = result.nodes[hit.name];
+    const displayName = node.display;
+
+    // Gather all pairs this player is involved in, sorted by count
+    const pairs = [];
+    for (const [key, count] of Object.entries(result.edgeMap)) {
+      const [a, b] = key.split('||');
+      if (a === hit.name || b === hit.name) {
+        const partnerName = a === hit.name ? b : a;
+        const partnerDisplay = result.nodes[partnerName]?.display ?? partnerName;
+        pairs.push({ partnerDisplay, count });
+      }
+    }
+    pairs.sort((a, b) => b.count - a.count);
+    const top3 = pairs.slice(0, 3);
+
+    const pairsHtml = top3.length
+      ? top3.map(p => `<div>\u21d4 ${p.partnerDisplay} &middot; ${p.count} passes</div>`).join('')
+      : `<div style="color:var(--muted)">No frequent pairs</div>`;
+
+    tooltip.innerHTML =
+      `<strong>${displayName}</strong>` +
+      `<div class="passnet-tooltip-sub">Top passing pairs:</div>` +
+      pairsHtml;
+
+    tooltip.style.left = (e.clientX + window.scrollX + 14) + 'px';
+    tooltip.style.top  = (e.clientY + window.scrollY - 20) + 'px';
+    tooltip.classList.add('visible');
+  };
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#canvas-passnet-home, #canvas-passnet-away')) {
+      tooltip.classList.remove('visible');
+    }
+  });
+
+  document.getElementById('canvas-passnet-home').addEventListener('click', onCanvasClick);
+  document.getElementById('canvas-passnet-away').addEventListener('click', onCanvasClick);
+})();
+
 // ── Tab switching ────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
-// ── Pass map ─────────────────────────────────────────────────────────
+// ── Logo → Home ──────────────────────────────────────────────────────
+document.getElementById('logo').addEventListener('click', loadCompetitions);
+// ── Pass network ─────────────────────────────────────────────────────────
+function renderPassNetworks(homeName, awayName) {
+  document.getElementById('label-passnet-home').textContent = homeName;
+  document.getElementById('label-passnet-away').textContent = awayName;
+
+  const nicknames = buildNicknameLookup();
+
+  const getNetworkPasses = teamName => {
+    // Find index of first substitution for this team
+    const firstSubIdx = state.events
+      .filter(e => e.type?.id === 19 && e.team?.name === teamName)
+      .reduce((min, e) => Math.min(min, e.index ?? Infinity), Infinity);
+
+    return state.events
+      .filter(e =>
+        e.type?.id === 30 &&
+        e.team?.name === teamName &&
+        (e.index ?? 0) < firstSubIdx &&
+        !e.pass?.outcome   // successful passes only
+      )
+      .map(e => ({
+        player:       e.player?.name,
+        recipient:    e.pass?.recipient?.name,
+        location:     e.location,
+        end_location: e.pass?.end_location,
+      }));
+  };
+
+  const renderStats = (statsId, result, color) => {
+    const ci = result.centralisationIndex;
+    document.getElementById(statsId).innerHTML = ci !== null
+      ? `Centralisation index: <span style="color:${color};font-weight:700">${ci.toFixed(3)}</span>
+         <span style="color:var(--muted);font-size:.78rem">&nbsp;(0 = perfectly distributed, 1 = one player does everything)</span>`
+      : `<span style="color:var(--muted)">No data</span>`;
+  };
+
+  const homeCanvas = document.getElementById('canvas-passnet-home');
+  const awayCanvas = document.getElementById('canvas-passnet-away');
+  const homeResult = drawPassNetwork(homeCanvas, getNetworkPasses(homeName), TEAM_COLORS[0], nicknames);
+  const awayResult = drawPassNetwork(awayCanvas, getNetworkPasses(awayName), TEAM_COLORS[1], nicknames);
+  homeCanvas._passNetResult = homeResult;
+  awayCanvas._passNetResult = awayResult;
+
+  renderStats('passnet-stats-home', homeResult, TEAM_COLORS[0]);
+  renderStats('passnet-stats-away', awayResult, TEAM_COLORS[1]);
+}// ── Pass map ─────────────────────────────────────────────────────────
 function initPassmapDropdowns(homeName, awayName) {
   document.getElementById('label-passmap-home').textContent = homeName;
   document.getElementById('label-passmap-away').textContent = awayName;

@@ -231,6 +231,12 @@ canvas { display: block; border-radius: 8px; }
 }
 .passmap-legend { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: .8rem; font-size: .85rem; }
 
+/* ── Pass network ────────────────────────────────────────────────── */
+.passnet-note {
+  font-size: .78rem; color: var(--muted); text-align: center;
+  margin: 0 0 .8rem; padding: 0;
+}
+
 /* ── Stats ───────────────────────────────────────────────────────── */
 .stats-table { background: var(--card); border-radius: 12px; overflow: hidden; }
 .stat-row {
@@ -261,6 +267,19 @@ canvas { display: block; border-radius: 8px; }
   opacity: 0; transition: opacity .15s; z-index: 300;
 }
 .shot-tooltip.visible { opacity: 1; }
+
+/* ── Pass network node tooltip ────────────────────────────── */
+.passnet-tooltip {
+  position: absolute; pointer-events: none;
+  background: rgba(15,20,15,0.93); color: #f3f4f6;
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+  padding: .5rem .9rem; font-size: .82rem; min-width: 170px;
+  line-height: 1.6; opacity: 0; transition: opacity .15s; z-index: 300;
+}
+.passnet-tooltip.visible { opacity: 1; }
+.passnet-tooltip-sub {
+  margin-top: 4px; color: var(--muted); font-size: .74rem;
+}
 
 /* ── Toast ───────────────────────────────────────────────────────── */
 .toast {

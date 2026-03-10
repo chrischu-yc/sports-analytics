@@ -11,7 +11,7 @@
   <!-- ── HEADER ─────────────────────────────────────────────────── -->
   <header>
     <div class="header-inner">
-      <span class="logo">⚽ StatsBomb Open Data Match Explorer</span>
+      <span class="logo" id="logo" style="cursor:pointer" title="Back to Home">⚽ StatsBomb Open Data Match Explorer</span>
       <nav id="breadcrumb"></nav>
       <button class="btn-random-global" id="btn-random-global" title="Pick a random match from the entire StatsBomb database">🎲 Random Match</button>
     </div>
@@ -48,6 +48,7 @@
         <button class="tab active" data-tab="formations">Formations</button>
         <button class="tab" data-tab="shotmap">Shot Map</button>
         <button class="tab" data-tab="passmap">Pass Map</button>
+        <button class="tab" data-tab="passnetwork">Pass Network</button>
         <button class="tab" data-tab="stats">Stats</button>
       </div>
 
@@ -79,6 +80,23 @@
           </div>
         </div>
         <div id="shot-legend" class="shot-legend"></div>
+      </div>
+
+      <!-- Pass network tab -->
+      <div id="tab-passnetwork" class="tab-content">
+        <p class="passnet-note">Successful passes before first substitution only. Node size = passes made &middot; Line width = passes between pair (min&nbsp;3) &middot; <em>Click a node to see the player&rsquo;s name &amp; top passing pairs</em></p>
+        <div class="passmap-row">
+          <div class="passmap-col">
+            <div class="passmap-label" id="label-passnet-home"></div>
+            <canvas id="canvas-passnet-home" width="480" height="320"></canvas>
+            <div id="passnet-stats-home" class="passmap-stats"></div>
+          </div>
+          <div class="passmap-col">
+            <div class="passmap-label" id="label-passnet-away"></div>
+            <canvas id="canvas-passnet-away" width="480" height="320"></canvas>
+            <div id="passnet-stats-away" class="passmap-stats"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Stats tab -->
@@ -120,6 +138,7 @@
 
   <!-- ── SHOT TOOLTIP ──────────────────────────────────────────── -->
   <div id="shot-tooltip" class="shot-tooltip"></div>
+  <div id="passnet-tooltip" class="passnet-tooltip"></div>
 
   <!-- ── TOAST ──────────────────────────────────────────────────── -->
   <div id="toast" class="toast"></div>
@@ -127,6 +146,7 @@
   <script src="pitch.js"></script>
   <script src="shotmap.js"></script>
   <script src="passmap.js"></script>
+  <script src="passnetwork.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
