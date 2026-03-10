@@ -13,6 +13,7 @@
     <div class="header-inner">
       <span class="logo" id="logo" style="cursor:pointer" title="Back to Home">⚽ StatsBomb Open Data Match Explorer</span>
       <nav id="breadcrumb"></nav>
+      <button class="btn-help" id="btn-help" title="How to use this site">?</button>
       <button class="btn-random-global" id="btn-random-global" title="Pick a random match from the entire StatsBomb database">🎲 Random Match</button>
     </div>
   </header>
@@ -22,8 +23,15 @@
 
     <!-- STEP 1: competition + season picker -->
     <section id="view-picker" class="view active">
-      <h2>Select a Competition &amp; Season</h2>
-      <p class="subtitle">Powered by StatsBomb open data</p>
+      <div class="picker-hero">
+        <h1 class="picker-title">Browse Competitions &amp; Seasons</h1>
+        <p class="picker-sub">Explore StatsBomb open football match data &mdash; formations, shot maps, passing networks, and more. Powered by StatsBomb open data.</p>
+        <div class="picker-stats" id="picker-stats"></div>
+      </div>
+
+      <div class="picker-filter">
+        <input type="search" id="comp-search" placeholder="&#128269;  Find competitions&hellip;" autocomplete="off" />
+      </div>
 
       <div class="card-grid" id="comp-grid">
         <div class="loading-spinner"></div>
@@ -135,6 +143,53 @@
     </section>
 
   </main>
+
+  <!-- ── HELP MODAL ───────────────────────────────────────────── -->
+  <div id="help-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Site manual">
+    <div class="modal-box">
+      <button class="modal-close" id="modal-close" title="Close">&times;</button>
+      <h2 class="modal-title">⚽ How to use the Match Explorer</h2>
+
+      <section class="modal-section">
+        <h3>🏠 Home</h3>
+        <p>Browse all available <strong>competitions and seasons</strong> from the StatsBomb open dataset. Click any card to see its matches. You can return here at any time by clicking the site title or the <em>Home</em> breadcrumb.</p>
+      </section>
+
+      <section class="modal-section">
+        <h3>📋 Match List</h3>
+        <p>Shows every match in the selected season. Click a match row to open the detailed view. Use <strong>🎲 Random Match</strong> in the header to jump straight to a random match from the entire dataset.</p>
+      </section>
+
+      <section class="modal-section">
+        <h3>🟢 Formations tab</h3>
+        <p>Displays the starting lineup for each team on a pitch diagram. Players are positioned roughly where they lined up, with the goalkeeper at the bottom. Substitutes and their timings are listed below the pitches.</p>
+      </section>
+
+      <section class="modal-section">
+        <h3>🎯 Shot Map tab</h3>
+        <p>Shows every shot taken by each team on a half-pitch view (goal at the top). Circle size represents xG (expected goals). Colours indicate outcome — goal, saved, off-target, etc. <strong>Click any dot</strong> to see the player's name, minute, outcome, and xG value.</p>
+      </section>
+
+      <section class="modal-section">
+        <h3>🔀 Pass Map tab</h3>
+        <p>Arrows show every pass attempted. Use the <strong>player dropdown</strong> to filter passes by individual player, or select <em>All players</em>. Successful passes are shown in the team colour; unsuccessful in grey. Pass accuracy stats are shown below each map.</p>
+      </section>
+
+      <section class="modal-section">
+        <h3>🕸️ Pass Network tab</h3>
+        <p>A network of passing connections using only successful passes <em>before the first substitution</em>. Node size reflects how many passes a player made; line thickness reflects how often two players passed to each other (pairs with fewer than 3 passes are hidden). The <strong>Centralisation index</strong> measures how evenly distributed passing is (0&thinsp;=&thinsp;spread evenly, 1&thinsp;=&thinsp;one player dominates). <strong>Click any node</strong> to see the player's full name and their top 3 passing partners.</p>
+      </section>
+
+      <section class="modal-section">
+        <h3>📊 Stats tab</h3>
+        <p>Head-to-head match statistics (shots, passes, possession, etc.) shown as comparative bars for quick comparison between the two teams.</p>
+      </section>
+
+      <footer class="modal-footer">
+        <p>Made by Chris Chu (<a href="https://github.com/chrischu-yc" target="_blank" rel="noopener">github.com/chrischu-yc</a>). Data provided by <a href="https://statsbomb.com" target="_blank" rel="noopener">StatsBomb</a> via their <a href="https://github.com/statsbomb/open-data" target="_blank" rel="noopener">open-data repository</a>. All event and lineup data is &copy; StatsBomb Services Ltd and is made available under the <a href="https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf" target="_blank" rel="noopener">StatsBomb Open Data Licence</a>. This site is an independent non-commercial project and is not affiliated with or endorsed by StatsBomb.</p>
+      </footer>
+    </div>
+  </div>
 
   <!-- ── SHOT TOOLTIP ──────────────────────────────────────────── -->
   <div id="shot-tooltip" class="shot-tooltip"></div>

@@ -116,7 +116,7 @@ async function loadMatches() {
   const { competition_id, season_id, competition_name, season_name } = state.selectedComp;
   showView('view-matches');
   setBreadcrumb([
-    { label: 'Competitions', onclick: loadCompetitions },
+    { label: 'Home', onclick: loadCompetitions },
     { label: `${competition_name} — ${season_name}` },
   ]);
 
@@ -182,7 +182,7 @@ async function loadMatchDetail(match) {
 
   showView('view-detail');
   setBreadcrumb([
-    { label: 'Competitions', onclick: loadCompetitions },
+    { label: 'Home', onclick: loadCompetitions },
     { label: `${competition_name} — ${season_name}`, onclick: loadMatches },
     { label: `${homeName} vs ${awayName}` },
   ]);
@@ -471,12 +471,12 @@ function renderShotmap() {
     const mx    = e.clientX - rect.left;
     const my    = e.clientY - rect.top;
 
-    // Find the topmost (last drawn) shot whose circle contains the click
+    // Pick the smallest circle containing the click — handles overlapping dots
+    // so a tiny low-xG shot inside a larger one is always selectable.
     let hit = null;
-    for (let i = hits.length - 1; i >= 0; i--) {
-      const { cx, cy, r } = hits[i];
-      const dist = Math.sqrt((mx - cx) ** 2 + (my - cy) ** 2);
-      if (dist <= r + 2) { hit = hits[i]; break; }
+    for (const h of hits) {
+      const dist = Math.sqrt((mx - h.cx) ** 2 + (my - h.cy) ** 2);
+      if (dist <= h.r + 2 && (!hit || h.r < hit.r)) hit = h;
     }
 
     if (!hit) { tooltip.classList.remove('visible'); return; }
@@ -575,6 +575,21 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 // ── Logo → Home ──────────────────────────────────────────────────────
 document.getElementById('logo').addEventListener('click', loadCompetitions);
+// ── Competition search filter ───────────────────────────────────────────────
+document.getElementById('comp-search').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase().trim();
+  document.querySelectorAll('#comp-grid .comp-card').forEach(card => {
+    card.style.display = !q || card.dataset.compName.includes(q) ? '' : 'none';
+  });
+});
+// ── Help modal ───────────────────────────────────────────────────────
+(function setupHelpModal() {
+  const modal = document.getElementById('help-modal');
+  document.getElementById('btn-help').addEventListener('click', () => modal.classList.add('open'));
+  document.getElementById('modal-close').addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.classList.remove('open'); });
+})();
 // ── Pass network ─────────────────────────────────────────────────────────
 function renderPassNetworks(homeName, awayName) {
   document.getElementById('label-passnet-home').textContent = homeName;

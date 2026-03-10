@@ -145,7 +145,7 @@ function drawPassNetwork(canvasEl, passes, teamColor, nicknames) {
     ctx.fillText(label, cx, cy, r * 1.8);  // maxWidth keeps long names in bounds
   }
 
-  // ── Centralisation index (matches notebook formula) ───────────────
+  // ── Centralisation index (presented by Grund (2012)) ───────────────
   const passCounts = Object.values(nodes).map(n => n.passCount);
   const totalPasses = passCounts.reduce((s, v) => s + v, 0);
   const maxPasses   = Math.max(...passCounts);
