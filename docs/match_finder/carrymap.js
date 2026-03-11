@@ -9,6 +9,13 @@
 
 const MIN_CARRY_DIST = 5;   // pitch units
 
+const OUTCOME_COLORS = {
+  pass:  { fill: 'rgba(249,115, 22,0.85)', stroke: '#f97316' },
+  shot:  { fill: 'rgba(234,179,  8,0.85)', stroke: '#eab308' },
+  lost:  { fill: 'rgba(168, 85,247,0.85)', stroke: '#a855f7' },
+  other: { fill: 'rgba(156,163,175,0.85)', stroke: '#9ca3af' },
+};
+
 function drawCarrymap(canvasEl, carries, teamColor) {
   const dpr = window.devicePixelRatio || 1;
   if (!canvasEl.dataset.cssW) {
@@ -40,7 +47,23 @@ function drawCarrymap(canvasEl, carries, teamColor) {
   const arrowColor = `rgba(${hexR},${hexG},${hexB},0.75)`;
   const dotColor   = `rgba(${hexR},${hexG},${hexB},0.45)`;
 
-  // Arrows
+  // Outcome circles first (under arrows), at carry end location
+  for (const c of carries) {
+    if (!c.location || !c.end_location) continue;
+    const [x1, y1] = c.location;
+    const [x2, y2] = c.end_location;
+    if (Math.hypot(x2 - x1, y2 - y1) < MIN_CARRY_DIST) continue;
+    const oc = OUTCOME_COLORS[c.outcome] || OUTCOME_COLORS.other;
+    ctx.beginPath();
+    ctx.arc(x2 * sx, y2 * sy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = oc.fill;
+    ctx.fill();
+    ctx.strokeStyle = oc.stroke;
+    ctx.lineWidth = 0.75;
+    ctx.stroke();
+  }
+
+  // Arrows on top of outcome circles
   for (const c of carries) {
     if (!c.location || !c.end_location) continue;
     const [x1, y1] = c.location;

@@ -816,6 +816,9 @@ function renderCarrymap() {
     return opts.length === 0 || opts.some(o => o.value === '');
   };
 
+  const evByIdx = {};
+  for (const e of state.events) evByIdx[e.index] = e;
+
   const getCarries = (teamName, selectId) => {
     const playerFilter = isAllSelected(selectId) ? [] : selectedValues(selectId);
     return state.events
@@ -824,18 +827,29 @@ function renderCarrymap() {
         e.team?.name === teamName &&
         (playerFilter.length === 0 || playerFilter.includes(e.player?.name))
       )
-      .map(e => ({
-        location:     e.location,
-        end_location: e.carry?.end_location,
-      }));
+      .map(e => {
+        const next  = evByIdx[e.index + 1];
+        const ntype = next?.type?.id;
+        let outcome;
+        if      (ntype === 30)                outcome = 'pass';
+        else if (ntype === 16)                outcome = 'shot';
+        else if (ntype === 38 || ntype === 3) outcome = 'lost';
+        else                                  outcome = 'other';
+        return {
+          location:     e.location,
+          end_location: e.carry?.end_location,
+          outcome,
+        };
+      });
   };
 
   const renderCarryStats = (statsId, carries, selectId, color) => {
-    const total = carries.filter(c => {
+    const validCarries = carries.filter(c => {
       if (!c.location || !c.end_location) return false;
       const [x1, y1] = c.location, [x2, y2] = c.end_location;
       return Math.hypot(x2 - x1, y2 - y1) >= 5;
-    }).length;
+    });
+    const total = validCarries.length;
 
     const playerFilter = isAllSelected(selectId) ? [] : selectedValues(selectId);
     const nicknames = buildNicknameLookup();
@@ -845,9 +859,17 @@ function renderCarrymap() {
         ? (nicknames[playerFilter[0]] ?? playerFilter[0].split(' ').pop())
         : `${playerFilter.length} players`;
 
+    const counts = { pass: 0, shot: 0, lost: 0, other: 0 };
+    for (const c of validCarries) counts[c.outcome] = (counts[c.outcome] || 0) + 1;
+
     document.getElementById(statsId).innerHTML =
       `<span style="color:${color};font-weight:600">${label}:</span> ` +
-      `<span style="color:#fff;font-weight:700">${total}</span> carries (≥5 units)`;
+      `<span style="color:#fff;font-weight:700">${total}</span> carries (≥5 units)` +
+      ` &nbsp;&middot;&nbsp; ` +
+      `<span style="color:#f97316">Pass ${counts.pass}</span> &middot; ` +
+      `<span style="color:#eab308">Shot ${counts.shot}</span> &middot; ` +
+      `<span style="color:#a855f7">Lost ${counts.lost}</span> &middot; ` +
+      `<span style="color:#9ca3af">Other ${counts.other}</span>`;
   };
 
   drawCarrymap(
