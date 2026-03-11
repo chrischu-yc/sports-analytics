@@ -234,6 +234,8 @@ async function loadMatchDetail(match) {
     renderShotmap();
     initPassmapDropdowns(homeName, awayName);
     renderPassmap();
+    initCarrymapDropdowns(homeName, awayName);
+    renderCarrymap();
     renderPassNetworks(homeName, awayName);
 
 
@@ -352,6 +354,15 @@ function renderBench(homeName, awayName) {
     }
     section.appendChild(panel);
   });
+
+  // Match ID footer
+  const mid = state.selectedMatch?.match_id;
+  if (mid) {
+    const footer = document.createElement('p');
+    footer.style.cssText = 'color:var(--muted);font-size:.75rem;margin-top:.5rem;text-align:center;grid-column:1/-1';
+    footer.textContent = `StatsBomb match ID: ${mid}`;
+    section.appendChild(footer);
+  }
 }
 
 // ── Stats ────────────────────────────────────────────────────────────
@@ -598,10 +609,19 @@ function renderPassNetworks(homeName, awayName) {
   const nicknames = buildNicknameLookup();
 
   const getNetworkPasses = teamName => {
-    // Find index of first substitution for this team
-    const firstSubIdx = state.events
+    // Find first substitution event for this team
+    const subEvents = state.events
       .filter(e => e.type?.id === 19 && e.team?.name === teamName)
-      .reduce((min, e) => Math.min(min, e.index ?? Infinity), Infinity);
+      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+    const firstSubEvent = subEvents[0] ?? null;
+    const firstSubIdx   = firstSubEvent?.index ?? Infinity;
+
+    // Attach first-sub info so renderStats can use it
+    getNetworkPasses._firstSub = getNetworkPasses._firstSub ?? {};
+    getNetworkPasses._firstSub[teamName] = firstSubEvent
+      ? { minute: firstSubEvent.minute, period: firstSubEvent.period }
+      : null;
 
     return state.events
       .filter(e =>
@@ -618,23 +638,37 @@ function renderPassNetworks(homeName, awayName) {
       }));
   };
 
-  const renderStats = (statsId, result, color) => {
-    const ci = result.centralisationIndex;
-    document.getElementById(statsId).innerHTML = ci !== null
+  const firstSubInfo = {};
+  const homePassesData = getNetworkPasses(homeName);
+  firstSubInfo[homeName] = getNetworkPasses._firstSub?.[homeName] ?? null;
+  const awayPassesData  = getNetworkPasses(awayName);
+  firstSubInfo[awayName] = getNetworkPasses._firstSub?.[awayName] ?? null;
+
+  const renderStats = (statsId, result, color, teamName) => {
+    const ci  = result.centralisationIndex;
+    const sub = firstSubInfo[teamName];
+    const subHtml = sub
+      ? `<div style="color:var(--muted);font-size:.78rem;margin-bottom:.3rem">
+           Data up to <strong style="color:var(--text)">
+           ${sub.minute}′
+           </strong> &mdash; first substitution
+         </div>`
+      : `<div style="color:var(--muted);font-size:.78rem;margin-bottom:.3rem">No substitutions &mdash; full match data used</div>`;
+    document.getElementById(statsId).innerHTML = subHtml + (ci !== null
       ? `Centralisation index: <span style="color:${color};font-weight:700">${ci.toFixed(3)}</span>
          <span style="color:var(--muted);font-size:.78rem">&nbsp;(0 = perfectly distributed, 1 = one player does everything)</span>`
-      : `<span style="color:var(--muted)">No data</span>`;
+      : `<span style="color:var(--muted)">No data</span>`);
   };
 
   const homeCanvas = document.getElementById('canvas-passnet-home');
   const awayCanvas = document.getElementById('canvas-passnet-away');
-  const homeResult = drawPassNetwork(homeCanvas, getNetworkPasses(homeName), TEAM_COLORS[0], nicknames);
-  const awayResult = drawPassNetwork(awayCanvas, getNetworkPasses(awayName), TEAM_COLORS[1], nicknames);
+  const homeResult = drawPassNetwork(homeCanvas, homePassesData, TEAM_COLORS[0], nicknames);
+  const awayResult = drawPassNetwork(awayCanvas, awayPassesData,  TEAM_COLORS[1], nicknames);
   homeCanvas._passNetResult = homeResult;
   awayCanvas._passNetResult = awayResult;
 
-  renderStats('passnet-stats-home', homeResult, TEAM_COLORS[0]);
-  renderStats('passnet-stats-away', awayResult, TEAM_COLORS[1]);
+  renderStats('passnet-stats-home', homeResult, TEAM_COLORS[0], homeName);
+  renderStats('passnet-stats-away', awayResult, TEAM_COLORS[1], awayName);
 }// ── Pass map ─────────────────────────────────────────────────────────
 function initPassmapDropdowns(homeName, awayName) {
   document.getElementById('label-passmap-home').textContent = homeName;
@@ -735,6 +769,105 @@ function renderPassmap() {
 
 document.getElementById('select-passmap-home').addEventListener('change', renderPassmap);
 document.getElementById('select-passmap-away').addEventListener('change', renderPassmap);
+
+// ── Carry map ─────────────────────────────────────────────────────────
+function initCarrymapDropdowns(homeName, awayName) {
+  document.getElementById('label-carrymap-home').textContent = homeName;
+  document.getElementById('label-carrymap-away').textContent = awayName;
+
+  const nicknames = buildNicknameLookup();
+
+  // Build set of players who actually made a carry
+  const carriers = new Set(state.events
+    .filter(e => e.type?.id === 43)
+    .map(e => e.player?.name));
+
+  const populate = (selectId, teamName) => {
+    const players = (state.lineups[teamName] ?? [])
+      .filter(p => carriers.has(p.real_name));
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = '';
+    const allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = '— All players —';
+    sel.appendChild(allOpt);
+    for (const p of players) {
+      const opt = document.createElement('option');
+      opt.value = p.real_name;
+      opt.textContent = `${p.jersey_number}. ${p.player_name}`;
+      sel.appendChild(opt);
+    }
+  };
+
+  populate('select-carrymap-home', homeName);
+  populate('select-carrymap-away', awayName);
+}
+
+function renderCarrymap() {
+  const homeName = state.selectedMatch.home_team.home_team_name ?? state.selectedMatch.home_team;
+  const awayName = state.selectedMatch.away_team.away_team_name ?? state.selectedMatch.away_team;
+
+  const selectedValues = id => {
+    const vals = Array.from(document.getElementById(id).selectedOptions).map(o => o.value);
+    return vals.filter(v => v !== '');
+  };
+  const isAllSelected = id => {
+    const opts = Array.from(document.getElementById(id).selectedOptions);
+    return opts.length === 0 || opts.some(o => o.value === '');
+  };
+
+  const getCarries = (teamName, selectId) => {
+    const playerFilter = isAllSelected(selectId) ? [] : selectedValues(selectId);
+    return state.events
+      .filter(e =>
+        e.type?.id === 43 &&
+        e.team?.name === teamName &&
+        (playerFilter.length === 0 || playerFilter.includes(e.player?.name))
+      )
+      .map(e => ({
+        location:     e.location,
+        end_location: e.carry?.end_location,
+      }));
+  };
+
+  const renderCarryStats = (statsId, carries, selectId, color) => {
+    const total = carries.filter(c => {
+      if (!c.location || !c.end_location) return false;
+      const [x1, y1] = c.location, [x2, y2] = c.end_location;
+      return Math.hypot(x2 - x1, y2 - y1) >= 5;
+    }).length;
+
+    const playerFilter = isAllSelected(selectId) ? [] : selectedValues(selectId);
+    const nicknames = buildNicknameLookup();
+    const label = playerFilter.length === 0
+      ? 'Team'
+      : playerFilter.length === 1
+        ? (nicknames[playerFilter[0]] ?? playerFilter[0].split(' ').pop())
+        : `${playerFilter.length} players`;
+
+    document.getElementById(statsId).innerHTML =
+      `<span style="color:${color};font-weight:600">${label}:</span> ` +
+      `<span style="color:#fff;font-weight:700">${total}</span> carries (≥5 units)`;
+  };
+
+  drawCarrymap(
+    document.getElementById('canvas-carrymap-home'),
+    getCarries(homeName, 'select-carrymap-home'),
+    TEAM_COLORS[0]
+  );
+  renderCarryStats('carrymap-stats-home', getCarries(homeName, 'select-carrymap-home'), 'select-carrymap-home', TEAM_COLORS[0]);
+
+  drawCarrymap(
+    document.getElementById('canvas-carrymap-away'),
+    getCarries(awayName, 'select-carrymap-away'),
+    TEAM_COLORS[1]
+  );
+  renderCarryStats('carrymap-stats-away', getCarries(awayName, 'select-carrymap-away'), 'select-carrymap-away', TEAM_COLORS[1]);
+}
+
+document.getElementById('select-carrymap-home').addEventListener('change', renderCarrymap);
+document.getElementById('select-carrymap-away').addEventListener('change', renderCarrymap);
+
 // ── Global random match (entire database) ──────────────────────────
 async function loadRandomFromEntireDB() {
   const btn = document.getElementById('btn-random-global');

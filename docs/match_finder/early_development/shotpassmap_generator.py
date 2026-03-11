@@ -90,7 +90,34 @@ def generate_passmap(match_id, team_name, player_name):
     ax.axis('off')
     plt.tight_layout()
     plt.show()
+
+def generate_carrymap(match_id, team_name, player_name):
+    events = sb.events(match_id=match_id)
+    carries = events[events['type'] == 'Carry']
+    player_carries = carries[carries['player'] == player_name]
+    # Only include carries that travel at least 5 units
+    player_carries = player_carries[player_carries.apply(lambda row: np.linalg.norm(np.array(row['carry_end_location']) - np.array(row['location'])) >= 5, axis=1)]
+
+    fig, ax = plt.subplots(figsize=(14, 10))
+    draw_pitch(ax)
+
+    for _, carry_event in player_carries.iterrows():
+        start_x, start_y = carry_event['location']
+        end_x, end_y = carry_event['carry_end_location']
+        ax.arrow(start_x, start_y, end_x - start_x, end_y - start_y,
+                 head_width=1, head_length=1, fc='orange', ec='orange', length_includes_head=True)
+        ax.scatter(start_x, start_y, c='orange', s=50, zorder=5, alpha=0.2)
+
+    ax.set_title(f'Carry Map for {player_name}', fontsize=16, color='white')
+    fig.patch.set_facecolor('#69ae5b')
+    ax.set_xlim(-5, PITCH_LENGTH + 5)
+    ax.set_ylim(-5, PITCH_WIDTH + 5)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    plt.tight_layout()
+    plt.show()
     
 
 generate_shotmap(3754146, 'Leicester City')
 generate_passmap(3754146, 'Leicester City', 'Jamie Vardy')
+generate_carrymap(3754146, 'Leicester City', 'Jamie Vardy')

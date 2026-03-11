@@ -56,6 +56,7 @@
         <button class="tab active" data-tab="formations">Formations</button>
         <button class="tab" data-tab="shotmap">Shot Map</button>
         <button class="tab" data-tab="passmap">Pass Map</button>
+        <button class="tab" data-tab="carrymap">Carry Map</button>
         <button class="tab" data-tab="passnetwork">Pass Network</button>
         <button class="tab" data-tab="stats">Stats</button>
       </div>
@@ -88,6 +89,34 @@
           </div>
         </div>
         <div id="shot-legend" class="shot-legend"></div>
+      </div>
+
+      <!-- Carry map tab -->
+      <div id="tab-carrymap" class="tab-content">
+        <div class="passmap-row">
+          <div class="passmap-col">
+            <div class="passmap-label" id="label-carrymap-home"></div>
+            <div class="passmap-select-wrap">
+              <select id="select-carrymap-home" multiple size="7"></select>
+              <p class="passmap-hint">Hold Ctrl / ⌘ to multi-select &middot; No selection = all carries</p>
+            </div>
+            <canvas id="canvas-carrymap-home" width="480" height="320"></canvas>
+            <div id="carrymap-stats-home" class="passmap-stats"></div>
+          </div>
+          <div class="passmap-col">
+            <div class="passmap-label" id="label-carrymap-away"></div>
+            <div class="passmap-select-wrap">
+              <select id="select-carrymap-away" multiple size="7"></select>
+              <p class="passmap-hint">Hold Ctrl / ⌘ to multi-select &middot; No selection = all carries</p>
+            </div>
+            <canvas id="canvas-carrymap-away" width="480" height="320"></canvas>
+            <div id="carrymap-stats-away" class="passmap-stats"></div>
+          </div>
+        </div>
+        <div class="passmap-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#e53e3ecc"></span>Home carries</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#60a5facc"></span>Away carries</span>
+        </div>
       </div>
 
       <!-- Pass network tab -->
@@ -201,6 +230,7 @@
   <script src="pitch.js"></script>
   <script src="shotmap.js"></script>
   <script src="passmap.js"></script>
+  <script src="carrymap.js"></script>
   <script src="passnetwork.js"></script>
   <script src="app.js"></script>
 </body>
