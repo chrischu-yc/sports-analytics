@@ -58,6 +58,7 @@
         <button class="tab" data-tab="passmap">Pass Map</button>
         <button class="tab" data-tab="carrymap">Carry Map</button>
         <button class="tab" data-tab="passnetwork">Pass Network</button>
+        <button class="tab" data-tab="xgplot">xG Plot</button>
         <button class="tab" data-tab="stats">Stats</button>
       </div>
 
@@ -89,6 +90,35 @@
           </div>
         </div>
         <div id="shot-legend" class="shot-legend"></div>
+      </div>
+
+      <!-- Pass map tab -->
+      <div id="tab-passmap" class="tab-content">
+        <div class="passmap-row">
+          <div class="passmap-col">
+            <div class="passmap-label" id="label-passmap-home"></div>
+            <div class="passmap-select-wrap">
+              <select id="select-passmap-home" multiple size="7"></select>
+              <p class="passmap-hint">Hold Ctrl / ⌘ to multi-select &middot; No selection = all passes</p>
+            </div>
+            <canvas id="canvas-passmap-home" width="480" height="320"></canvas>
+            <div id="passmap-stats-home" class="passmap-stats"></div>
+          </div>
+          <div class="passmap-col">
+            <div class="passmap-label" id="label-passmap-away"></div>
+            <div class="passmap-select-wrap">
+              <select id="select-passmap-away" multiple size="7"></select>
+              <p class="passmap-hint">Hold Ctrl / ⌘ to multi-select &middot; No selection = all passes</p>
+            </div>
+            <canvas id="canvas-passmap-away" width="480" height="320"></canvas>
+            <div id="passmap-stats-away" class="passmap-stats"></div>
+          </div>
+        </div>
+        <div class="passmap-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#e53e3ecc"></span>Successful (home)</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#60a5facc"></span>Successful (away)</span>
+          <span class="legend-item"><span class="legend-dot" style="background:rgba(160,160,160,0.55)"></span>Unsuccessful</span>
+        </div>
       </div>
 
       <!-- Carry map tab -->
@@ -140,38 +170,15 @@
         </div>
       </div>
 
+      <!-- xG Plot tab -->
+      <div id="tab-xgplot" class="tab-content">
+        <div id="xgplot-summary" class="xgplot-summary"></div>
+        <canvas id="canvas-xgplot" width="960" height="480"></canvas>
+      </div>
+
       <!-- Stats tab -->
       <div id="tab-stats" class="tab-content">
         <div id="stats-table" class="stats-table"></div>
-      </div>
-
-      <!-- Pass map tab -->
-      <div id="tab-passmap" class="tab-content">
-        <div class="passmap-row">
-          <div class="passmap-col">
-            <div class="passmap-label" id="label-passmap-home"></div>
-            <div class="passmap-select-wrap">
-              <select id="select-passmap-home" multiple size="7"></select>
-              <p class="passmap-hint">Hold Ctrl / ⌘ to multi-select &middot; No selection = all passes</p>
-            </div>
-            <canvas id="canvas-passmap-home" width="480" height="320"></canvas>
-            <div id="passmap-stats-home" class="passmap-stats"></div>
-          </div>
-          <div class="passmap-col">
-            <div class="passmap-label" id="label-passmap-away"></div>
-            <div class="passmap-select-wrap">
-              <select id="select-passmap-away" multiple size="7"></select>
-              <p class="passmap-hint">Hold Ctrl / ⌘ to multi-select &middot; No selection = all passes</p>
-            </div>
-            <canvas id="canvas-passmap-away" width="480" height="320"></canvas>
-            <div id="passmap-stats-away" class="passmap-stats"></div>
-          </div>
-        </div>
-        <div class="passmap-legend">
-          <span class="legend-item"><span class="legend-dot" style="background:#e53e3ecc"></span>Successful (home)</span>
-          <span class="legend-item"><span class="legend-dot" style="background:#60a5facc"></span>Successful (away)</span>
-          <span class="legend-item"><span class="legend-dot" style="background:rgba(160,160,160,0.55)"></span>Unsuccessful</span>
-        </div>
       </div>
     </section>
 
@@ -219,7 +226,12 @@
       </section>
 
       <section class="modal-section">
-        <h3>📊 Stats tab</h3>
+        <h3>� xG Plot tab</h3>
+        <p>A cumulative expected goals (xG) chart showing how both teams' probability of scoring evolved during the match. Each step represents a shot taken. <strong>Stars</strong> mark goals with the goalscorer's last name. Below the chart, see the match score, total xG, number of shots, and win/draw/loss probabilities calculated from xG data.</p>
+      </section>
+
+      <section class="modal-section">
+        <h3>�📊 Stats tab</h3>
         <p>Head-to-head match statistics (shots, passes, possession, etc.) shown as comparative bars for quick comparison between the two teams.</p>
       </section>
 
@@ -241,6 +253,7 @@
   <script src="passmap.js"></script>
   <script src="carrymap.js"></script>
   <script src="passnetwork.js"></script>
+  <script src="xgplot.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

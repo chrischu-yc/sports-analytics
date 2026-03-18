@@ -206,7 +206,8 @@ async function loadMatchDetail(match) {
   // Loading indicators on canvases
   ['canvas-home', 'canvas-away', 'canvas-shotmap-home', 'canvas-shotmap-away',
    'canvas-passmap-home', 'canvas-passmap-away',
-   'canvas-passnet-home', 'canvas-passnet-away'].forEach(id => {
+   'canvas-carrymap-home', 'canvas-carrymap-away',
+   'canvas-passnet-home', 'canvas-passnet-away', 'canvas-xgplot'].forEach(id => {
     const c = document.getElementById(id);
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, c.width, c.height);
@@ -218,6 +219,7 @@ async function loadMatchDetail(match) {
     ctx.textBaseline = 'middle';
     ctx.fillText('Loading…', c.width / 2, c.height / 2);
   });
+  document.getElementById('xgplot-summary').innerHTML = '<div style="color:var(--muted)">Loading xG summary…</div>';
 
   try {
     const [eventsData, lineupsData] = await Promise.all([
@@ -237,6 +239,7 @@ async function loadMatchDetail(match) {
     initCarrymapDropdowns(homeName, awayName);
     renderCarrymap();
     renderPassNetworks(homeName, awayName);
+    renderXGPlot();
 
 
 
@@ -889,6 +892,132 @@ function renderCarrymap() {
 
 document.getElementById('select-carrymap-home').addEventListener('change', renderCarrymap);
 document.getElementById('select-carrymap-away').addEventListener('change', renderCarrymap);
+
+// ── xG Plot ──────────────────────────────────────────────────────────
+
+function renderXGPlot() {
+  const homeName = state.selectedMatch.home_team.home_team_name ?? state.selectedMatch.home_team;
+  const awayName = state.selectedMatch.away_team.away_team_name ?? state.selectedMatch.away_team;
+
+  // Extract shots data from events
+  const shots = state.events.filter(e => e.type?.id === 16).sort((a, b) => {
+    if (a.minute !== b.minute) return a.minute - b.minute;
+    return (a.second || 0) - (b.second || 0);
+  });
+
+  // Build player nickname lookup (same as pass network)
+  const nicknames = buildNicknameLookup();
+
+  // Build team shot arrays with cumulative xG
+  const homeShots = [];
+  const awayShots = [];
+  let homeXG = 0, awayXG = 0;
+
+  for (const shot of shots) {
+    const xg = shot.shot?.statsbomb_xg || 0;
+    const isGoal = shot.shot?.outcome?.id === 97;
+    const playerRealName = shot.player?.name || 'Unknown';
+    const playerDisplay = nicknames[playerRealName] ?? playerRealName;
+
+    if (shot.team?.name === homeName) {
+      homeXG += xg;
+      homeShots.push({
+        minute: shot.minute + (shot.second || 0) / 60,
+        cumXG: homeXG,
+        xg,
+        isGoal,
+        player: playerRealName,
+        playerDisplay,
+      });
+    } else if (shot.team?.name === awayName) {
+      awayXG += xg;
+      awayShots.push({
+        minute: shot.minute + (shot.second || 0) / 60,
+        cumXG: awayXG,
+        xg,
+        isGoal,
+        player: playerRealName,
+        playerDisplay,
+      });
+    }
+  }
+
+  // Calculate match duration
+  const matchDuration = Math.max(...state.events.map(e => e.minute || 0), 90);
+
+  // Use actual match score from state instead of counting goals
+  const homeGoals = state.selectedMatch.home_score;
+  const awayGoals = state.selectedMatch.away_score;
+
+  // Calculate goal probabilities from xG values
+  const homeXGList = homeShots.map(s => s.xg);
+  const awayXGList = awayShots.map(s => s.xg);
+
+  // PMF calculation: P(scoring exactly k goals)
+  function calculateGoalPMF(xgValues) {
+    let pmf = new Float64Array([1.0]);
+    for (const p of xgValues) {
+      const newPMF = new Float64Array(pmf.length + 1);
+      for (let i = 0; i < pmf.length; i++) {
+        newPMF[i] += pmf[i] * (1 - p);  // miss
+        newPMF[i + 1] += pmf[i] * p;    // goal
+      }
+      pmf = newPMF;
+    }
+    return pmf;
+  }
+
+  const homePMF = calculateGoalPMF(homeXGList);
+  const awayPMF = calculateGoalPMF(awayXGList);
+
+  // Calculate win/draw/lose probabilities
+  let homeWinProb = 0, drawProb = 0, awayWinProb = 0;
+
+  // Draw: home score == away score
+  for (let i = 0; i < Math.min(homePMF.length, awayPMF.length); i++) {
+    drawProb += homePMF[i] * awayPMF[i];
+  }
+
+  // Home win: home score > away score
+  for (let i = 0; i < homePMF.length; i++) {
+    for (let j = 0; j < i && j < awayPMF.length; j++) {
+      homeWinProb += homePMF[i] * awayPMF[j];
+    }
+  }
+
+  // Away win: away score > home score
+  for (let j = 0; j < awayPMF.length; j++) {
+    for (let i = 0; i < j && i < homePMF.length; i++) {
+      awayWinProb += homePMF[i] * awayPMF[j];
+    }
+  }
+
+  // Render canvas
+  drawXGPlot(
+    document.getElementById('canvas-xgplot'),
+    homeName,
+    awayName,
+    homeShots,
+    awayShots,
+    matchDuration
+  );
+
+  // Render summary
+  renderXGSummary(
+    'xgplot-summary',
+    homeName,
+    awayName,
+    homeGoals,
+    awayGoals,
+    homeXG,
+    awayXG,
+    homeShots.length,
+    awayShots.length,
+    homeWinProb,
+    drawProb,
+    awayWinProb
+  );
+}
 
 // ── Global random match (entire database) ──────────────────────────
 async function loadRandomFromEntireDB() {
