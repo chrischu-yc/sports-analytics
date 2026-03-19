@@ -622,10 +622,9 @@ function renderShotmap() {
     const s = hit.shot;
     const minute = Number.isFinite(s.minute) ? Math.floor(s.minute) : s.minute;
     const outcome = s.shot_outcome ? ` · ${s.shot_outcome}` : '';
-    const zone = s.shot_zone ? ` · ${s.shot_zone}` : '';
     const xg = (s.shot_statsbomb_xg ?? 0) > 0 ? ` · xG ${s.shot_statsbomb_xg.toFixed(2)}` : '';
     const og = s.is_own_goal ? ' (OG)' : '';
-    tooltip.textContent = `${s.player}${og}, ${minute}'${outcome}${zone}${xg}`;
+    tooltip.textContent = `${s.player}${og}, ${minute}'${outcome}${xg}`;
 
     // Position tooltip near the click, keeping it on-screen
     const scrollX = window.scrollX, scrollY = window.scrollY;

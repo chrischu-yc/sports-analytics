@@ -30,17 +30,20 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
   ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(0, 0, w, h);
 
-  // Grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-  ctx.lineWidth = 0.5;
+  // Grid: use stronger major lines and lighter minor lines for readability
+  const drawGridLine = (x1, y1, x2, y2, isMajor) => {
+    ctx.beginPath();
+    ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = isMajor ? 1.25 : 0.9;
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  };
 
-  // Vertical grid lines (every 10 minutes)
+  // Vertical grid lines (every 10 minutes, emphasize every 30)
   for (let m = 0; m <= matchDuration; m += 10) {
     const x = margin.left + (m / matchDuration) * chartW;
-    ctx.beginPath();
-    ctx.moveTo(x, margin.top);
-    ctx.lineTo(x, margin.top + chartH);
-    ctx.stroke();
+    drawGridLine(x, margin.top, x, margin.top + chartH, m % 30 === 0);
   }
 
   // Calculate max xG for scaling
@@ -53,13 +56,11 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
   const maxXG = Math.max(homeMaxXG, awayMaxXG, 1);
   const yMax = Math.ceil(maxXG + 0.5);
 
-  // Horizontal grid lines (every 0.5 xG)
+  // Horizontal grid lines (every 0.5 xG, emphasize whole-number ticks)
   for (let xg = 0; xg <= yMax; xg += 0.5) {
     const y = margin.top + chartH - (xg / yMax) * chartH;
-    ctx.beginPath();
-    ctx.moveTo(margin.left, y);
-    ctx.lineTo(margin.left + chartW, y);
-    ctx.stroke();
+    const isMajor = Number.isInteger(xg);
+    drawGridLine(margin.left, y, margin.left + chartW, y, isMajor);
   }
 
   // Axes
