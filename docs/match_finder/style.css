@@ -260,6 +260,7 @@ h2 { font-size: 1.6rem; margin-bottom: .3rem; }
   color: var(--muted); padding: .6rem 1.2rem; font-size: 1rem; cursor: pointer;
   margin-bottom: -1px; transition: color .15s, border-color .15s;
 }
+.tab-hidden { display: none; }
 .tab.active, .tab:hover { color: var(--text); border-bottom-color: var(--green-lt); }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
@@ -391,6 +392,43 @@ canvas { display: block; border-radius: 8px; }
 .xg-away-prob { background: rgba(239,68,68,0.1); }
 .xg-prob strong { font-size: 1.1rem; color: #fff; display: block; margin-bottom: .2rem; }
 
+/* ── Penalty shootout ───────────────────────────────────────────── */
+.shootout-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+}
+.shootout-headline {
+  font-size: 1rem;
+  color: var(--text);
+  margin-bottom: .7rem;
+}
+.shootout-summary {
+  color: var(--muted);
+  font-size: .86rem;
+  margin-bottom: .9rem;
+}
+.shootout-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+}
+.shootout-table th,
+.shootout-table td {
+  padding: .52rem .55rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.shootout-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.shootout-team-home { color: var(--red); font-weight: 700; }
+.shootout-team-away { color: var(--blue); font-weight: 700; }
+.shootout-made { color: #4ade80; font-weight: 700; }
+.shootout-missed { color: #f87171; font-weight: 700; }
+
 /* ── Stats ───────────────────────────────────────────────────────── */
 .stats-table { background: var(--card); border-radius: 12px; overflow: hidden; }
 .stat-row {
@@ -434,6 +472,26 @@ canvas { display: block; border-radius: 8px; }
 .passnet-tooltip-sub {
   margin-top: 4px; color: var(--muted); font-size: .74rem;
 }
+
+/* ── xG goal tooltip ─────────────────────────────────────────── */
+.xg-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(15,20,15,0.95);
+  color: #f3f4f6;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: .55rem .85rem;
+  font-size: .8rem;
+  line-height: 1.55;
+  min-width: 220px;
+  max-width: 320px;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 300;
+}
+.xg-tooltip.visible { opacity: 1; }
+.xg-tooltip-sub { color: var(--muted); font-size: .74rem; }
 
 /* ── Toast ───────────────────────────────────────────────────────── */
 .toast {

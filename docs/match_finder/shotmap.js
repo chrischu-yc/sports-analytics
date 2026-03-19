@@ -122,6 +122,7 @@ function drawShotmap(canvasEl, shots) {
   // Legend categories
   const categories = {
     'Goal':       { color: '#facc15', stroke: '#fff' },
+    'Own Goal':   { color: '#a855f7', stroke: '#e9d5ff' },
     'Saved':      { color: '#3b82f6', stroke: '#93c5fd' },
     'Off Target': { color: '#ef4444', stroke: '#fca5a5' },
     'Blocked':    { color: '#94a3b8', stroke: '#cbd5e1' },
@@ -131,6 +132,7 @@ function drawShotmap(canvasEl, shots) {
   const getCategory = outcome => {
     if (!outcome) return 'Off Target';
     if (outcome === 'Goal') return 'Goal';
+    if (outcome === 'Own Goal') return 'Own Goal';
     if (outcome === 'Saved') return 'Saved';
     if (outcome === 'Blocked') return 'Blocked';
     if (outcome === 'Post' || outcome === 'Wayward') return 'Off Target';
@@ -158,7 +160,7 @@ function drawShotmap(canvasEl, shots) {
     ctx.stroke();
 
     // Goal: star marker
-    if (cat === 'Goal') {
+    if (cat === 'Goal' || cat === 'Own Goal') {
       ctx.fillStyle = '#fff';
       ctx.font = `bold ${r + 2}px serif`;
       ctx.textAlign = 'center';

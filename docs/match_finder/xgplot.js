@@ -103,6 +103,7 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
 
   // Draw step curves for each team
   const colors = { home: '#60a5fa', away: '#ef4444' };
+  const hits = [];
 
   const drawTeamCurve = (shots, color) => {
     if (shots.length === 0) return;
@@ -135,6 +136,7 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
 
       const x = scaleX(shot.minute);
       const y = scaleY(shot.cumXG);
+      hits.push({ cx: x, cy: y, r: 10, shot });
 
       // Draw star
       ctx.fillStyle = color;
@@ -146,7 +148,8 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
       const displayName = shot.playerDisplay || shot.player;
       const parts = displayName.split(' ');
       const lastname = parts.length <= 1 ? parts[0] : parts.slice(1).join(' ');
-      const label = `${Math.floor(shot.minute)}' ${lastname}`;
+      const ogTag = shot.isOwnGoal ? 'OG ' : '';
+      const label = `${Math.floor(shot.minute)}' ${ogTag}${lastname}`;
 
       // Always place labels top-left of the goal marker for both teams.
       ctx.font = 'bold 11px sans-serif';
@@ -162,6 +165,8 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
 
   drawGoalMarker(homeTeamShots, colors.home);
   drawGoalMarker(awayTeamShots, colors.away);
+
+  return { hits };
 }
 
 // Helper function to draw a 5-pointed star

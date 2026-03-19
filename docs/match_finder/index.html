@@ -59,6 +59,7 @@
         <button class="tab" data-tab="carrymap">Carry Map</button>
         <button class="tab" data-tab="passnetwork">Pass Network</button>
         <button class="tab" data-tab="xgplot">xG Plot</button>
+        <button class="tab tab-hidden" id="tab-btn-shootout" data-tab="shootout">Penalty Shootout</button>
         <button class="tab" data-tab="stats">Stats</button>
       </div>
 
@@ -176,6 +177,11 @@
         <canvas id="canvas-xgplot" width="960" height="480"></canvas>
       </div>
 
+      <!-- Penalty Shootout tab (only shown when period 5 exists) -->
+      <div id="tab-shootout" class="tab-content">
+        <div id="shootout-content" class="shootout-card"></div>
+      </div>
+
       <!-- Stats tab -->
       <div id="tab-stats" class="tab-content">
         <div id="stats-table" class="stats-table"></div>
@@ -226,12 +232,18 @@
       </section>
 
       <section class="modal-section">
-        <h3>� xG Plot tab</h3>
-        <p>A cumulative expected goals (xG) chart showing how both teams' probability of scoring evolved during the match. Each step represents a shot taken. <strong>Stars</strong> mark goals with the goalscorer's last name. Below the chart, see the match score, total xG, number of shots, and win/draw/loss probabilities calculated from xG data.</p>
+        <h3>📈 xG Plot tab</h3>
+        <p>Shows each team&rsquo;s <strong>cumulative expected goals (xG)</strong> over time as a step chart (one step per shot). Goal events are marked with stars, and scorer labels are shown near the marker in team colours for quick identification.</p>
+        <p>The summary block above the plot includes the <strong>team names and final scoreline</strong>, plus each side&rsquo;s total xG and shot count. The win / draw / loss percentages are estimated from shot-level xG values and shown to <strong>2 decimal places</strong>.</p>
       </section>
 
       <section class="modal-section">
-        <h3>�📊 Stats tab</h3>
+        <h3>🎯 Penalty Shootout tab</h3>
+        <p>This tab appears <strong>only</strong> when the match includes a shootout (StatsBomb period = 5). All regular analysis tabs (shots, passes, carries, xG and stats) automatically use events only up to the end of period 4, while period 5 events are shown separately here.</p>
+      </section>
+
+      <section class="modal-section">
+        <h3>📊 Stats tab</h3>
         <p>Head-to-head match statistics (shots, passes, possession, etc.) shown as comparative bars for quick comparison between the two teams.</p>
       </section>
 
@@ -244,6 +256,7 @@
   <!-- ── SHOT TOOLTIP ──────────────────────────────────────────── -->
   <div id="shot-tooltip" class="shot-tooltip"></div>
   <div id="passnet-tooltip" class="passnet-tooltip"></div>
+  <div id="xg-tooltip" class="xg-tooltip"></div>
 
   <!-- ── TOAST ──────────────────────────────────────────────────── -->
   <div id="toast" class="toast"></div>

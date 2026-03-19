@@ -11,6 +11,9 @@ let state = {
   competitions: [],        // all competition+season rows
   matches: [],             // matches for selected comp+season
   events: [],              // events for selected match
+  eventsFull: [],          // full event list including period 5 (if present)
+  shootoutEvents: [],      // period-5 events only
+  hasShootout: false,
   lineups: {},             // { teamName: [...players] }
   selectedComp: null,      // { competition_id, season_id, competition_name, season_name }
   selectedMatch: null,
@@ -55,9 +58,73 @@ function setBreadcrumb(crumbs) {
   });
 }
 
+function getShootoutScore(events, homeName, awayName) {
+  const kicks = (events ?? []).filter(e => e.period === 5 && e.type?.id === 16);
+  let homePK = 0;
+  let awayPK = 0;
+  for (const e of kicks) {
+    if (e.shot?.outcome?.name !== 'Goal') continue;
+    const team = e.team?.name;
+    if (team === homeName) homePK++;
+    if (team === awayName) awayPK++;
+  }
+  return { homePK, awayPK };
+}
+
+function renderMatchHeader(match, homeName, awayName, competitionName, seasonName, extraLabel = '') {
+  const extraHtml = extraLabel
+    ? ` <span style="color:var(--muted);font-size:1rem;font-weight:700">(${extraLabel})</span>`
+    : '';
+
+  document.getElementById('match-header').innerHTML = `
+    <div class="teams">${homeName} <span style="color:var(--muted);font-size:1rem">vs</span> ${awayName}</div>
+    <div class="score-big">${match.home_score} – ${match.away_score}${extraHtml}</div>
+    <div class="info">${match.match_date} · ${competitionName} · ${seasonName}
+      · ${match.competition_stage?.name ?? ''} · Stadium: ${match.stadium?.name ?? 'Unknown'}</div>`;
+}
+
 function formatFormation(f) {
   if (!f) return '?';
   return String(f).split('').join('-');
+}
+
+function classifyShotZone(location, shotType) {
+  if (shotType === 'Penalty') return 'Penalty';
+  if (!Array.isArray(location) || location.length < 2) return 'Unknown';
+  let [x, y] = location;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return 'Unknown';
+
+  // Normalize to attacking half for consistent zone labels.
+  if (x < 60) x = 120 - x;
+
+  const inSixYard = x >= 114 && y >= 30 && y <= 50;
+  if (inSixYard) return 'In 6-yard box';
+
+  const inPenaltyBox = x >= 102 && y >= 18 && y <= 62;
+  return inPenaltyBox ? 'Inside the box' : 'Outside the box';
+}
+
+function isOwnGoalAgainstEvent(e) {
+  const t = (e?.type?.name ?? '').trim().toLowerCase();
+  return t === 'own goal against';
+}
+
+function normalizeOwnGoalLocation(location) {
+  if (!Array.isArray(location) || location.length < 2) return null;
+  let [x, y] = location;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (x < 60) x = 120 - x;
+  return [Math.max(0, Math.min(120, x)), Math.max(0, Math.min(80, y))];
+}
+
+function getOwnGoalAgainstAttribution(e, homeName, awayName) {
+  const concedingTeam = e?.team?.name;
+  if (!concedingTeam) return null;
+  const scoringTeam = concedingTeam === homeName
+    ? awayName
+    : (concedingTeam === awayName ? homeName : null);
+  if (!scoringTeam) return null;
+  return { scoringTeam, concedingTeam };
 }
 
 // ── Step 1: Load competitions ────────────────────────────────────────
@@ -187,18 +254,18 @@ async function loadMatchDetail(match) {
     { label: `${homeName} vs ${awayName}` },
   ]);
 
-  // Header
-  document.getElementById('match-header').innerHTML = `
-    <div class="teams">${homeName} <span style="color:var(--muted);font-size:1rem">vs</span> ${awayName}</div>
-    <div class="score-big">${match.home_score} – ${match.away_score}</div>
-    <div class="info">${match.match_date} · ${competition_name} · ${season_name}
-      · ${match.competition_stage?.name ?? ''} · Stadium: ${match.stadium?.name ?? 'Unknown'}</div>`;
+  // Header (initial; enriched after events load if AET/PK applies)
+  renderMatchHeader(match, homeName, awayName, competition_name, season_name);
 
   // Update shotmap labels
   document.getElementById('label-shotmap-home').textContent = homeName;
   document.getElementById('label-shotmap-away').textContent = awayName;
   document.getElementById('home-team-title').textContent = homeName;
   document.getElementById('away-team-title').textContent = awayName;
+
+  // Reset shootout visibility until we know this match has period-5 events.
+  setShootoutTabVisible(false);
+  document.getElementById('shootout-content').innerHTML = '';
 
   // Reset to formations tab
   showTab('formations');
@@ -227,8 +294,25 @@ async function loadMatchDetail(match) {
       fetchJSON(`${DATA_LINEUPS_URL(match.match_id)}`),
     ]);
 
-    state.events = eventsData;
+    state.eventsFull = eventsData;
+    state.hasShootout = eventsData.some(e => e.period === 5);
+    state.shootoutEvents = state.hasShootout
+      ? eventsData.filter(e => e.period === 5)
+      : [];
+    // For all existing analysis tabs, ignore period 5 and use only up to period 4.
+    state.events = state.hasShootout
+      ? eventsData.filter(e => (e.period ?? 0) < 5)
+      : eventsData;
+
+    const hasAET = eventsData.some(e => e.period === 3 || e.period === 4);
+    const { homePK, awayPK } = getShootoutScore(eventsData, homeName, awayName);
+    const flags = [];
+    if (hasAET) flags.push('AET');
+    if (state.hasShootout) flags.push(`PK ${homePK}-${awayPK}`);
+    renderMatchHeader(match, homeName, awayName, competition_name, season_name, flags.join(', '));
+
     state.lineups = buildLineups(lineupsData);
+    setShootoutTabVisible(state.hasShootout);
 
     renderFormations(homeName, awayName);
     renderBench(homeName, awayName);
@@ -240,6 +324,7 @@ async function loadMatchDetail(match) {
     renderCarrymap();
     renderPassNetworks(homeName, awayName);
     renderXGPlot();
+    if (state.hasShootout) renderShootoutTab(homeName, awayName);
 
 
 
@@ -371,6 +456,7 @@ function renderBench(homeName, awayName) {
 // ── Stats ────────────────────────────────────────────────────────────
 function renderStats(homeName, awayName) {
   const ev = state.events;
+  const ownGoalAgainstEvents = ev.filter(isOwnGoalAgainstEvent);
 
   const count = (team, type) =>
     ev.filter(e => e.team?.name === team && e.type?.id === type).length;
@@ -378,6 +464,10 @@ function renderStats(homeName, awayName) {
     ev.filter(e => e.team?.name === team && e.type?.id === type &&
                    e[type === 16 ? 'shot' : 'pass']?.outcome?.name === outcome).length;
   const shots   = team => ev.filter(e => e.team?.name === team && e.type?.id === 16);
+  const ownGoalsAgainst = team => ownGoalAgainstEvents
+    .map(e => getOwnGoalAgainstAttribution(e, homeName, awayName))
+    .filter(a => a && a.concedingTeam === team)
+    .length;
   const xg      = team => shots(team).reduce((s, e) => s + (e.shot?.statsbomb_xg ?? 0), 0);
   const goals   = team => shots(team).filter(e => e.shot?.outcome?.name === 'Goal').length;
   const passes  = team => ev.filter(e => e.team?.name === team && e.type?.id === 30);
@@ -385,6 +475,7 @@ function renderStats(homeName, awayName) {
 
   const rows = [
     ['Goals',         goals(homeName),                   goals(awayName)],
+    ['Own Goals', ownGoalsAgainst(homeName),   ownGoalsAgainst(awayName)],
     ['Shots',         shots(homeName).length,             shots(awayName).length],
     ['xG',            xg(homeName).toFixed(2),            xg(awayName).toFixed(2)],
     ['Passes',        passes(homeName).length,             passes(awayName).length],
@@ -435,18 +526,51 @@ function buildNicknameLookup() {
 function renderShotmap() {
   const homeName = state.selectedMatch.home_team.home_team_name ?? state.selectedMatch.home_team;
   const awayName = state.selectedMatch.away_team.away_team_name ?? state.selectedMatch.away_team;
+  const ownGoalAgainstEvents = state.events.filter(isOwnGoalAgainstEvent);
 
   const nicknames = buildNicknameLookup();
 
-  const getShots = teamName => state.events.filter(
-    e => e.team?.name === teamName && e.type?.id === 16
-  ).map(e => ({
-    location:          e.location,
-    shot_outcome:      e.shot?.outcome?.name,
-    shot_statsbomb_xg: e.shot?.statsbomb_xg,
-    player:            nicknames[e.player?.name] ?? e.player?.name,
-    minute:            e.minute,
-  }));
+  const getShots = teamName => {
+    const regularShots = state.events
+      .filter(e => e.team?.name === teamName && e.type?.id === 16)
+      .map(e => {
+        const shotType = e.shot?.type?.name ?? 'Unknown';
+        const location = Array.isArray(e.location) ? e.location : null;
+        return {
+          location,
+          shot_outcome:      e.shot?.outcome?.name,
+          shot_statsbomb_xg: e.shot?.statsbomb_xg,
+          player:            nicknames[e.player?.name] ?? e.player?.name,
+          minute:            e.minute,
+          shot_zone:         classifyShotZone(location, shotType),
+          is_own_goal:       false,
+          _second:           e.second ?? 0,
+          _index:            e.index ?? 0,
+        };
+      });
+
+    const ownGoalEvents = ownGoalAgainstEvents
+      .map(e => {
+        const attrib = getOwnGoalAgainstAttribution(e, homeName, awayName);
+        if (!attrib || attrib.scoringTeam !== teamName) return null;
+        const location = normalizeOwnGoalLocation(e.location);
+        return {
+          location,
+          shot_outcome:      'Own Goal',
+          shot_statsbomb_xg: 0,
+          player:            nicknames[e.player?.name] ?? e.player?.name ?? 'Unknown',
+          minute:            e.minute,
+          shot_zone:         classifyShotZone(location, 'Own Goal'),
+          is_own_goal:       true,
+          _second:           e.second ?? 0,
+          _index:            e.index ?? 0,
+        };
+      })
+      .filter(Boolean);
+
+    return [...regularShots, ...ownGoalEvents]
+      .sort((a, b) => (a.minute - b.minute) || (a._second - b._second) || (a._index - b._index));
+  };
 
   const attach = (canvasEl, result) => {
     canvasEl._shotHits = result.hits;
@@ -496,9 +620,12 @@ function renderShotmap() {
     if (!hit) { tooltip.classList.remove('visible'); return; }
 
     const s = hit.shot;
-    const xg = s.shot_statsbomb_xg ? ` · xG ${s.shot_statsbomb_xg.toFixed(2)}` : '';
+    const minute = Number.isFinite(s.minute) ? Math.floor(s.minute) : s.minute;
     const outcome = s.shot_outcome ? ` · ${s.shot_outcome}` : '';
-    tooltip.textContent = `${s.player}, ${s.minute}'${outcome}${xg}`;
+    const zone = s.shot_zone ? ` · ${s.shot_zone}` : '';
+    const xg = (s.shot_statsbomb_xg ?? 0) > 0 ? ` · xG ${s.shot_statsbomb_xg.toFixed(2)}` : '';
+    const og = s.is_own_goal ? ' (OG)' : '';
+    tooltip.textContent = `${s.player}${og}, ${minute}'${outcome}${zone}${xg}`;
 
     // Position tooltip near the click, keeping it on-screen
     const scrollX = window.scrollX, scrollY = window.scrollY;
@@ -581,6 +708,52 @@ function renderShotmap() {
 
   document.getElementById('canvas-passnet-home').addEventListener('click', onCanvasClick);
   document.getElementById('canvas-passnet-away').addEventListener('click', onCanvasClick);
+})();
+
+// ── xG goal tooltip ───────────────────────────────────────────────
+(function setupXGGoalTooltip() {
+  const tooltip = document.getElementById('xg-tooltip');
+  const canvas = document.getElementById('canvas-xgplot');
+  if (!tooltip || !canvas) return;
+
+  canvas.addEventListener('click', (e) => {
+    const hits = canvas._xgGoalHits;
+    if (!hits || !hits.length) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    let hit = null;
+    for (const h of hits) {
+      const dist = Math.sqrt((mx - h.cx) ** 2 + (my - h.cy) ** 2);
+      if (dist <= h.r + 2 && (!hit || h.r < hit.r)) hit = h;
+    }
+
+    if (!hit) { tooltip.classList.remove('visible'); return; }
+
+    const s = hit.shot;
+    const minute = Number.isFinite(s.minute) ? String(Math.floor(s.minute)) : 'Unknown';
+    const xg = Number.isFinite(s.xg) ? s.xg.toFixed(3) : 'Unknown';
+
+    tooltip.innerHTML =
+      `<strong>${s.playerDisplay ?? s.player ?? 'Unknown'}</strong>` +
+      `<div class="xg-tooltip-sub">${s.team ?? 'Unknown Team'}</div>` +
+      `<div>${minute}' &middot; ${s.outcome ?? 'Unknown'}</div>` +
+      `<div>Phase: <strong>${s.phase ?? 'Unknown'}</strong></div>` +
+      `<div>Play pattern: ${s.playPattern ?? 'Unknown'}</div>` +
+      `<div>Shot type: ${s.shotType ?? 'Unknown'}</div>` +
+      `<div>Shot zone: ${s.shotZone ?? 'Unknown'}</div>` +
+      `<div>xG: ${xg}</div>`;
+
+    tooltip.style.left = (e.clientX + window.scrollX + 14) + 'px';
+    tooltip.style.top = (e.clientY + window.scrollY - 20) + 'px';
+    tooltip.classList.add('visible');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#canvas-xgplot')) tooltip.classList.remove('visible');
+  });
 })();
 
 // ── Tab switching ────────────────────────────────────────────────────
@@ -893,16 +1066,90 @@ function renderCarrymap() {
 document.getElementById('select-carrymap-home').addEventListener('change', renderCarrymap);
 document.getElementById('select-carrymap-away').addEventListener('change', renderCarrymap);
 
+// ── Penalty shootout tab ───────────────────────────────────────────
+function setShootoutTabVisible(visible) {
+  const btn = document.getElementById('tab-btn-shootout');
+  if (!btn) return;
+  btn.classList.toggle('tab-hidden', !visible);
+  if (!visible && btn.classList.contains('active')) showTab('formations');
+}
+
+function renderShootoutTab(homeName, awayName) {
+  const box = document.getElementById('shootout-content');
+  const events = (state.shootoutEvents ?? []).slice().sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+
+  if (!events.length) {
+    box.innerHTML = '<p class="shootout-summary">No shootout events were found.</p>';
+    return;
+  }
+
+  const nicknames = buildNicknameLookup();
+  const kicks = events.filter(e => e.type?.id === 16);
+
+  let homePK = 0;
+  let awayPK = 0;
+
+  const rows = kicks.map((e, idx) => {
+    const team = e.team?.name ?? 'Unknown';
+    const isHome = team === homeName;
+    const playerReal = e.player?.name ?? 'Unknown';
+    const playerDisplay = nicknames[playerReal] ?? playerReal;
+    const outcome = e.shot?.outcome?.name ?? 'Unknown';
+    const made = outcome === 'Goal';
+
+    if (made) {
+      if (isHome) homePK++;
+      else if (team === awayName) awayPK++;
+    }
+
+    const teamClass = isHome ? 'shootout-team-home' : 'shootout-team-away';
+    const outcomeClass = made ? 'shootout-made' : 'shootout-missed';
+    const scoreText = `${homePK}-${awayPK}`;
+
+    return `
+      <tr>
+        <td>${idx + 1}</td>
+        <td class="${teamClass}">${team}</td>
+        <td>${playerDisplay}</td>
+        <td class="${outcomeClass}">${outcome}</td>
+        <td>${scoreText}</td>
+      </tr>`;
+  }).join('');
+
+  const finalPK = getShootoutScore(events, homeName, awayName);
+
+  box.innerHTML = `
+    <div class="shootout-headline">Penalty Shootout</div>
+    <div class="shootout-summary">
+      Final shootout score: <strong>${homeName} ${finalPK.homePK} - ${finalPK.awayPK} ${awayName}</strong>
+    </div>
+    <table class="shootout-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Team</th>
+          <th>Kicker</th>
+          <th>Outcome</th>
+          <th>Running Score</th>
+        </tr>
+      </thead>
+      <tbody>${rows || '<tr><td colspan="5">No penalty kicks found.</td></tr>'}</tbody>
+    </table>`;
+}
+
 // ── xG Plot ──────────────────────────────────────────────────────────
 
 function renderXGPlot() {
   const homeName = state.selectedMatch.home_team.home_team_name ?? state.selectedMatch.home_team;
   const awayName = state.selectedMatch.away_team.away_team_name ?? state.selectedMatch.away_team;
+  const ownGoalAgainstEvents = state.events.filter(isOwnGoalAgainstEvent);
 
-  // Extract shots data from events
-  const shots = state.events.filter(e => e.type?.id === 16).sort((a, b) => {
+  // Extract shots + Own Goal Against events in chronological order.
+  const regularShots = state.events.filter(e => e.type?.id === 16);
+  const shots = [...regularShots, ...ownGoalAgainstEvents].sort((a, b) => {
     if (a.minute !== b.minute) return a.minute - b.minute;
-    return (a.second || 0) - (b.second || 0);
+    if ((a.second ?? 0) !== (b.second ?? 0)) return (a.second ?? 0) - (b.second ?? 0);
+    return (a.index ?? 0) - (b.index ?? 0);
   });
 
   // Build player nickname lookup (same as pass network)
@@ -914,30 +1161,58 @@ function renderXGPlot() {
   let homeXG = 0, awayXG = 0;
 
   for (const shot of shots) {
-    const xg = shot.shot?.statsbomb_xg || 0;
-    const isGoal = shot.shot?.outcome?.id === 97;
+    const isOwnGoal = isOwnGoalAgainstEvent(shot);
+    const attrib = isOwnGoal ? getOwnGoalAgainstAttribution(shot, homeName, awayName) : null;
+    const scoringTeam = isOwnGoal ? attrib?.scoringTeam : shot.team?.name;
+    if (!scoringTeam) continue;
+
+    const xg = isOwnGoal ? 0 : (shot.shot?.statsbomb_xg || 0);
+    const isGoal = isOwnGoal ? true : shot.shot?.outcome?.id === 97;
     const playerRealName = shot.player?.name || 'Unknown';
     const playerDisplay = nicknames[playerRealName] ?? playerRealName;
+    const playPattern = shot.play_pattern?.name ?? 'Unknown';
+    const phase = playPattern === 'Regular Play' ? 'Open Play' : 'Set Piece';
+    const shotType = isOwnGoal ? 'Own Goal' : (shot.shot?.type?.name ?? 'Unknown');
+    const outcome = isOwnGoal ? 'Own Goal' : (shot.shot?.outcome?.name ?? 'Unknown');
+    const rawLocation = Array.isArray(shot.location) ? shot.location : null;
+    const location = isOwnGoal ? normalizeOwnGoalLocation(rawLocation) : rawLocation;
+    const shotZone = classifyShotZone(location, shotType);
 
-    if (shot.team?.name === homeName) {
+    if (scoringTeam === homeName) {
       homeXG += xg;
       homeShots.push({
         minute: shot.minute + (shot.second || 0) / 60,
         cumXG: homeXG,
         xg,
         isGoal,
+        isOwnGoal,
+        team: homeName,
         player: playerRealName,
         playerDisplay,
+        outcome,
+        phase,
+        playPattern,
+        shotType,
+        shotZone,
+        location,
       });
-    } else if (shot.team?.name === awayName) {
+    } else if (scoringTeam === awayName) {
       awayXG += xg;
       awayShots.push({
         minute: shot.minute + (shot.second || 0) / 60,
         cumXG: awayXG,
         xg,
         isGoal,
+        isOwnGoal,
+        team: awayName,
         player: playerRealName,
         playerDisplay,
+        outcome,
+        phase,
+        playPattern,
+        shotType,
+        shotZone,
+        location,
       });
     }
   }
@@ -993,14 +1268,16 @@ function renderXGPlot() {
   }
 
   // Render canvas
-  drawXGPlot(
-    document.getElementById('canvas-xgplot'),
+  const xgCanvas = document.getElementById('canvas-xgplot');
+  const xgResult = drawXGPlot(
+    xgCanvas,
     homeName,
     awayName,
     homeShots,
     awayShots,
     matchDuration
   );
+  xgCanvas._xgGoalHits = xgResult?.hits ?? [];
 
   // Render summary
   renderXGSummary(
