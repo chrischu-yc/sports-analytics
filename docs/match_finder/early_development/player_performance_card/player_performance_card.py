@@ -219,28 +219,565 @@ def compute_metrics(player_data):
         "miscontrol": len(player_data["miscontrol"]),
     }
 
+# -------------------------------------Calculate Match Rating------------------------------------
+def classify_pitch_area(location):
+    if not isinstance(location, list) or len(location) < 2:
+        return 'anywhere'
+    x, y = location[0], location[1]
+    if x <= 18 and 18 <= y <= 62:
+        return 'own_box'
+    if x >= 102 and 18 <= y <= 62:
+        return 'opposition_box'
+    if x < 40:
+        return 'own_third'
+    if x < 80:
+        return 'middle_third'
+    return 'final_third'
 
-def metric_grade(metrics):
-    weighted_score = (
-        0.35 * metrics["pass_accuracy"]
-        + 0.2 * metrics["final_third_accuracy"]
-        + 0.15 * metrics["dribble_success"]
-        + 0.15 * min(metrics["progressive_carries"] * 8, 100)
-        + 0.15 * min(metrics["recoveries"] * 6, 100)
+def is_in_penalty_area(location):
+    if not isinstance(location, list) or len(location) < 2:
+        return False
+    x, y = location[0], location[1]
+    return x >= 102 and 18 <= y <= 62
+
+# Passing impact calculation
+LONG_PASS_THRESHOLD = 30.0
+PASS_POSITIVE_WEIGHTS = {
+    'shot_assist': 0.40,
+    'goal_assist': 1.20,
+    'into_final_third': 0.12,
+    'into_penalty_area': 0.05,
+    'long_pass': 0.07,
+    'switch_long_pass': 0.03,
+    'under_pressure': 0.03,
+}
+SWITCH_LATERAL_THRESHOLD = 24.0
+PASS_MISPLACED_PENALTY_BY_START_AREA = {
+    'own_box': 0.40,
+    'own_third': 0.10,
+    'middle_third': 0.07,
+    'final_third': 0.02,
+    'opposition_box': 0.02,
+    'anywhere': 0.20,
+}
+def get_pass_length(event_row):
+    raw_length = event_row.get('pass_length')
+    if pd.notna(raw_length):
+        return float(raw_length)
+
+    start = event_row.get('location')
+    end = event_row.get('pass_end_location')
+    if isinstance(start, list) and isinstance(end, list) and len(start) >= 2 and len(end) >= 2:
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        return (dx * dx + dy * dy) ** 0.5
+    return 0.0
+def compute_pass_impact(event_row):
+    start_loc = event_row.get('location')
+    end_loc = event_row.get('pass_end_location')
+    start_area = classify_pitch_area(start_loc)
+    end_area = classify_pitch_area(end_loc)
+    pass_length = get_pass_length(event_row)
+
+    pass_outcome = event_row.get('pass_outcome')
+    complete = pd.isna(pass_outcome)
+    incomplete = pass_outcome == 'Incomplete'
+    out_pass = pass_outcome == 'Out'
+
+    if incomplete or out_pass:
+        penalty = PASS_MISPLACED_PENALTY_BY_START_AREA.get(start_area, PASS_MISPLACED_PENALTY_BY_START_AREA['anywhere'])
+        outcome_label = 'out' if out_pass else 'incomplete'
+        return -penalty, start_area, end_area, outcome_label
+
+    if complete:
+        # Completed pass: only specific high-value pass types contribute positively.
+        components = []
+        impact = 0.0
+
+        if bool(event_row.get('pass_shot_assist') == True) and not bool(event_row.get('pass_goal_assist') == True):
+            components.append('shot_assist')
+            impact += PASS_POSITIVE_WEIGHTS['shot_assist']
+
+        if bool(event_row.get('pass_goal_assist') == True):
+            components.append('goal_assist')
+            impact += PASS_POSITIVE_WEIGHTS['goal_assist']
+
+        into_final_third = (end_area in ('final_third', 'opposition_box')) and (start_area not in {'final_third', 'opposition_box'})
+        if into_final_third:
+            components.append('into_final_third')
+            impact += PASS_POSITIVE_WEIGHTS['into_final_third']
+
+        into_penalty_area = (end_area == 'opposition_box') and (start_area != 'opposition_box')
+        if into_penalty_area:
+            components.append('into_penalty_area')
+            impact += PASS_POSITIVE_WEIGHTS['into_penalty_area']
+
+        pass_progress_x = None
+        pass_progress_y = None
+        if isinstance(start_loc, list) and isinstance(end_loc, list) and len(start_loc) >= 2 and len(end_loc) >= 2:
+            pass_progress_x = end_loc[0] - start_loc[0]
+            pass_progress_y = end_loc[1] - start_loc[1]
+
+        if pass_length >= LONG_PASS_THRESHOLD:
+            ends_in_final_zone = end_area in {'final_third', 'opposition_box'}
+            is_forward_or_sideways = (pass_progress_x is None) or (pass_progress_x >= 0)
+            if ends_in_final_zone or is_forward_or_sideways:
+                components.append('long_pass')
+                impact += PASS_POSITIVE_WEIGHTS['long_pass']
+
+            is_switch = (pass_progress_y is not None) and (abs(pass_progress_y) >= SWITCH_LATERAL_THRESHOLD)
+            if is_switch:
+                components.append('switch_long_pass')
+                impact += PASS_POSITIVE_WEIGHTS['switch_long_pass']
+
+        if bool(event_row.get('under_pressure') == True):
+            components.append('under_pressure')
+            impact += PASS_POSITIVE_WEIGHTS['under_pressure']
+
+        outcome_label = 'complete_neutral' if impact == 0 else 'complete_' + '+'.join(components)
+        return impact, start_area, end_area, outcome_label
+    return 0.0, start_area, end_area, 'pass_other'
+
+# Shot impact calculation
+SHOT_OUTCOME_GROUPS = {
+    'goal': {'Goal'},
+    'saved': {'Saved', 'Saved To Post', 'Saved Off T', 'Saved to Post'},
+    'blocked_or_off_target': {'Blocked', 'Off T', 'Post'},
+    'wayward': {'Wayward'},
+}
+def _to_float_xg(value):
+    try:
+        return float(value) if pd.notna(value) else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+def _label_safe(value, fallback='unknown'):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return fallback
+    return str(value).strip().lower().replace(' ', '_').replace('-', '_')
+
+def classify_shot_outcome(shot_outcome):
+    if shot_outcome in SHOT_OUTCOME_GROUPS['goal']:
+        return 'goal'
+    if shot_outcome in SHOT_OUTCOME_GROUPS['saved']:
+        return 'saved'
+    if shot_outcome in SHOT_OUTCOME_GROUPS['blocked_or_off_target']:
+        return 'blocked_or_off_target'
+    if shot_outcome in SHOT_OUTCOME_GROUPS['wayward']:
+        return 'wayward'
+    return 'blocked_or_off_target'
+
+def compute_shot_impact(event_row):
+    shot_outcome = event_row.get('shot_outcome')
+    shot_type = event_row.get('shot_type')
+    shot_type_label = _label_safe(shot_type, fallback='unspecified')
+    xg = max(0.0, min(_to_float_xg(event_row.get('shot_statsbomb_xg')), 1.5))
+    is_open_goal = bool(event_row.get('shot_open_goal') == True)
+    outcome_group = classify_shot_outcome(shot_outcome)
+
+    if outcome_group == 'goal':
+        low_xg_boost = max(0.0, 0.7 - xg) * 0.9
+        open_goal_adj = -0.50 if is_open_goal else 0.10
+        impact = 1.2 + low_xg_boost + open_goal_adj
+        return impact, f'goal__{shot_type_label}'
+
+    if shot_type == 'Penalty':
+        impact = -1.20
+        return impact, f'missed_penalty__{shot_type_label}'
+
+    if is_open_goal:
+        impact = -(0.70 * xg)
+        return impact, f'open_goal_miss__{shot_type_label}'
+
+    if outcome_group == 'saved':
+        # Saved shots gain more credit as xG rises.
+        impact = 0.05 + 0.50 * xg
+        return impact, f'saved__{shot_type_label}'
+
+    if outcome_group == 'blocked_or_off_target':
+        # Positive, but less than saved shots. Higher xG reduces the reward.
+        impact = max(0.05, 0.30 - 0.20 * xg)
+        return impact, f'blocked_or_off_target__{shot_type_label}'
+
+    # Wayward shots are negative and punished more with higher xG.
+    impact = -(0.15 + 0.30 * xg)
+    return impact, f'wayward__{shot_type_label}'
+
+# Pressure
+def compute_pressure_impact(event_row):
+    base_impact = 0.03
+    is_counterpress = bool(event_row.get('counterpress') == True)
+    if is_counterpress:
+        return base_impact + 0.03, 'pressure_counterpress'
+    return base_impact, 'pressure'
+
+# Miscontrol, error, dispossessed, dribbled past impact (area-based penalties)
+BY_AREA_GAIN_BACK_HEAVY = {
+    'own_box': 0.40,
+    'own_third': 0.27,
+    'middle_third': 0.15,
+    'final_third': 0.05,
+    'opposition_box': 0.05,
+    'anywhere': 0.10,
+}
+
+def compute_turnover_area_penalty(location, label):
+    area = classify_pitch_area(location)
+    penalty = BY_AREA_GAIN_BACK_HEAVY.get(area, BY_AREA_GAIN_BACK_HEAVY['anywhere'])
+    if label == 'error':
+        penalty *= 1.20
+    if label == 'dribbled_past':
+        penalty *= 0.80
+    return -penalty, label, area
+
+def compute_miscontrol_impact(event_row):
+    aerial_won = bool(event_row.get('miscontrol_aerial_won') == True)
+    area = classify_pitch_area(event_row.get('location'))
+
+    if aerial_won:
+        return 0.0, 'miscontrol_after_aerial_win_neutral', area
+
+    return compute_turnover_area_penalty(event_row.get('location'), 'miscontrol')
+
+def compute_error_impact(event_row):
+    return compute_turnover_area_penalty(event_row.get('location'), 'error')
+
+def compute_dispossessed_impact(event_row):
+    return compute_turnover_area_penalty(event_row.get('location'), 'dispossessed')
+
+def compute_dribbled_past_impact(event_row):
+    return compute_turnover_area_penalty(event_row.get('location'), 'dribbled_past')
+
+# Clearance
+CLEARANCE_REWARD_BY_AREA = {'own_box': 0.10, 'own_third': 0.04,}
+def compute_clearance_impact(event_row):
+    area = classify_pitch_area(event_row.get('location'))
+    reward = CLEARANCE_REWARD_BY_AREA.get(area, 0.0)
+    if reward == 0.0:
+        return 0.0, 'clearance_no_impact', area
+    return reward, 'clearance', area
+
+# Block
+BLOCK_REWARD_BY_AREA = {'own_box': 0.15, 'own_third': 0.08, 'middle_third': 0.04, 'final_third': 0.01}
+def compute_block_impact(event_row):
+    if event_row.get('block_deflection') == True or event_row.get('block_offensive') == True:
+        return 0.0, 'block_no_impact', classify_pitch_area(event_row.get('location'))
+    area = classify_pitch_area(event_row.get('location'))
+    reward = BLOCK_REWARD_BY_AREA.get(area, 0.0)
+    if bool(event_row.get('block_save') == True):
+        reward *= 1.25
+    if bool(event_row.get('block_counterpress') == True):
+        reward += 0.04
+    return reward, 'block', area
+
+# Fouls
+def compute_foul_committed_impact(event_row):
+    def _as_minute(value):
+        try:
+            minute = float(value)
+        except (TypeError, ValueError):
+            minute = 90.0
+        return max(1.0, min(90.0, minute))
+
+    def _time_scaled(early_penalty, late_penalty, minute):
+        # minute=1 -> early_penalty, minute=90 -> late_penalty
+        early_factor = (90.0 - minute) / 89.0
+        return late_penalty + (early_penalty - late_penalty) * early_factor
+
+    minute = _as_minute(event_row.get('minute'))
+    card = str(event_row.get('foul_committed_card') or '').strip()
+    leads_to_penalty = bool(event_row.get('foul_committed_penalty') == True)
+
+    if card == 'Red Card':
+        penalty = _time_scaled(4.0, 2.0, minute)
+        label = 'straight_red_card'
+    elif card in {'Second Yellow', 'Second Yellow Card'}:
+        penalty = _time_scaled(2.6, 1.3, minute)
+        label = 'second_yellow_card'
+    elif card == 'Yellow Card':
+        penalty = _time_scaled(1.1, 0.5, minute)
+        label = 'first_yellow_card'
+    elif leads_to_penalty:
+        penalty = 1.0
+        label = 'penalty_conceded'
+    else:
+        area = classify_pitch_area(event_row.get('location'))
+        if area == 'own_third':
+            return -0.07, 'dangerous_freekick_foul', area
+        return 0.0, 'foul_no_impact', 'anywhere'
+
+    if leads_to_penalty and label != 'penalty_conceded':
+        penalty = max(penalty, 1.8)
+        label = f'{label}+penalty_conceded'
+
+    return -penalty, label, 'anywhere'
+
+BY_AREA_GAIN_FRONT_HEAVY = {
+    'own_box': 0.01,
+    'own_third': 0.03,
+    'middle_third': 0.05,
+    'final_third': 0.10,
+    'opposition_box': 0.40,
+    'anywhere': 0.10,
+}
+def compute_foul_won_impact(event_row):
+    area = classify_pitch_area(event_row.get('location'))
+    leads_to_penalty = bool(event_row.get('foul_won_penalty') == True)
+    if leads_to_penalty:
+        return 1.0, 'penalty_won', area
+    reward = BY_AREA_GAIN_FRONT_HEAVY.get(area, BY_AREA_GAIN_FRONT_HEAVY['anywhere'])
+    if reward == 0.0:
+        return 0.0, 'foul_won_no_impact', area
+    return reward, 'foul_won', area
+
+def compute_bad_behaviour_impact(event_row):
+    card = str(event_row.get('bad_behaviour_card') or '').strip()
+    if card == 'Red Card':
+        return -3.0, 'bad_behaviour_red_card', 'anywhere'
+    if card in {'Yellow Card', 'Second Yellow', 'Second Yellow Card'}:
+        return -1.5, 'bad_behaviour_yellow_card', 'anywhere'
+    return 0.0, 'bad_behaviour_no_impact', 'anywhere'
+
+# Ball Recovery
+def compute_ball_recovery_impact(event_row):
+    recovery_failure = bool(event_row.get('ball_recovery_recovery_failure') == True)
+    if recovery_failure:
+        return -0.10, 'ball_recovery_failed', classify_pitch_area(event_row.get('location'))
+    return 0.05, 'ball_recovery', classify_pitch_area(event_row.get('location'))
+
+# Ball Receipt
+def compute_ball_receipt_impact(event_row):
+    if 'ball_receipt_outcome' in event_row and event_row.get('ball_receipt_outcome') == 'Incomplete':
+        return -0.03, 'ball_receipt_incomplete', classify_pitch_area(event_row.get('pass_end_location'))
+    area = classify_pitch_area(event_row.get('pass_end_location'))
+    if area in {'own_box', 'own_third'}:
+        return 0.005, 'ball_receipt_own_third', area
+    if area == 'middle_third':
+        return 0.01, 'ball_receipt_middle_third', area
+    if area in {'final_third'}:
+        return 0.02, 'ball_receipt_final_third', area
+    if area in {'opposition_box'}:
+        return 0.04, 'ball_receipt_opposition_box', area
+    return 0.0, 'ball_receipt_other_area', area
+
+# Carry
+def compute_carry_impact(event_row):
+    start_area = classify_pitch_area(event_row.get('location'))
+    end_area = classify_pitch_area(event_row.get('carry_end_location'))
+    progress_x = event_row.get('carry_end_location')[0] - event_row.get('location')[0] if isinstance(event_row.get('location'), list) and isinstance(event_row.get('carry_end_location'), list) else 0
+    progress_y = event_row.get('carry_end_location')[1] - event_row.get('location')[1] if isinstance(event_row.get('location'), list) and isinstance(event_row.get('carry_end_location'), list) else 0
+    carry_length = np.sqrt(progress_x ** 2 + progress_y ** 2)
+    if carry_length < 3.0:
+        return 0.0, 'carry_no_impact', end_area
+    is_progressive = (progress_x >= 10) if progress_x is not None else False
+    under_pressure = bool(event_row.get('under_pressure') == True)
+    impact = 0.0
+    labels = []
+    if is_progressive:
+        impact += 0.08
+        labels.append('progressive_carry')
+    if end_area in {'final_third', 'opposition_box'} and start_area not in {'final_third', 'opposition_box'}:
+        impact += 0.03
+        labels.append('carry_into_final_third')
+    if under_pressure:
+        impact += 0.02
+        labels.append('carry_under_pressure')
+    if carry_length >= LONG_PASS_THRESHOLD:
+        impact += 0.05
+        labels.append('long_carry')
+    return impact, 'carry_' + '_'.join(labels) if labels else 'carry_no_impact', end_area
+
+# Duel
+TACKLE_AREA_MULTIPLIER = {
+    'opposition_box': 1.2,
+    'final_third': 1.2,
+    'middle_third': 1.0,
+    'own_third': 1.2,
+    'own_box': 1.4,
+    'anywhere': 1.0,
+}
+def compute_duel_impact(event_row):
+    area = classify_pitch_area(event_row.get('location'))
+    duel_type = event_row.get('duel_type')
+    if duel_type == 'Ariel Lost':
+        if area in {'final_third', 'opposition_box'}:
+            return -0.02, 'aerial_duel_lost_in_attacking_area', area
+        if area == 'middle_third':
+            return -0.03, 'aerial_duel_lost_in_middle_third', area
+        if area == 'own_third':
+            return -0.05, 'aerial_duel_lost_in_defensive_third', area
+        if area == 'own_box':
+            return -0.07, 'aerial_duel_lost_in_own_box', area
+        return -0.03, 'aerial_duel_lost', area
+    if duel_type == 'Tackle':
+        outcome = event_row.get('duel_outcome')
+        multiplier = TACKLE_AREA_MULTIPLIER.get(area, TACKLE_AREA_MULTIPLIER['anywhere'])
+        if outcome in {'Won'}:
+            return 0.15 * multiplier, 'tackle_won', area
+        if outcome in {'Success', 'Success In Play', 'Success Out'}:
+            return 0.12 * multiplier, 'tackle_success', area
+        if outcome in {'Lost In Play', 'Lost Out'}:
+            return -0.06 * multiplier, 'tackle_lost', area
+        return 0.0, 'tackle_no_impact', area
+    return 0.0, 'duel_other', area
+    
+# Dribble
+def compute_dribble_impact(event_row):
+    area = classify_pitch_area(event_row.get('location'))
+    outcome = event_row.get('dribble_outcome')
+    if outcome == 'Complete':
+        if area in {'final_third', 'opposition_box'}:
+            return 0.20, 'successful_dribble_in_attacking_area', area
+        if area == 'middle_third':
+            return 0.10, 'successful_dribble_in_middle_third', area
+        if area in {'own_third', 'own_box'}:
+            return 0.05, 'successful_dribble_in_defensive_area', area
+        return 0.08, 'successful_dribble', area
+    if outcome == 'Incomplete':
+        if area in {'final_third', 'opposition_box'}:
+            return -0.04, 'failed_dribble_in_attacking_area', area
+        if area == 'middle_third':
+            return -0.07, 'failed_dribble_in_middle_third', area
+        if area in {'own_third', 'own_box'}:
+            return -0.13, 'failed_dribble_in_defensive_area', area
+        return -0.05, 'failed_dribble', area
+    return 0.0, 'dribble_no_impact', area
+
+# Interception
+def compute_interception_impact(event_row):
+    area = classify_pitch_area(event_row.get('location'))
+    outcome = event_row.get('interception_outcome')
+    multiplier = TACKLE_AREA_MULTIPLIER.get(area, TACKLE_AREA_MULTIPLIER['anywhere'])
+    if outcome in {'Won', 'Success', 'Success In Play', 'Success Out'}:
+        return 0.10 * multiplier, 'interception_success', area
+    if outcome in {'Lost', 'Lost In Play', 'Lost Out'}:
+        return -0.05 * multiplier, 'interception_lost', area
+    return 0.0, 'interception_no_impact', area
+
+# 50/50
+def compute_5050_impact(event_row):
+    area = classify_pitch_area(event_row.get('location'))
+    outcome = event_row.get('50/50_outcome')
+    if outcome in {'Won', 'Success To Team'}:
+        return 0.10, '50/50_won', area
+    if outcome in {'Lost', 'Success To Opposition'}:
+        return -0.05, '50/50_lost', area
+    return 0.0, '50/50_no_impact', area
+
+def infer_grade(rating):
+    if rating >= 8.5:
+        return 'A+', "#1cb530"
+    if rating >= 8.0:
+        return 'A', "#56cc66"
+    if rating >= 7.5:
+        return 'B+', "#baf72b"
+    if rating >= 7.0:
+        return 'B', "#d8f72b"
+    if rating >= 6.5:
+        return 'C+', "#f0f72b"
+    if rating >= 6.0:
+        return 'C', "#f7e62b"
+    if rating >= 5.5:
+        return 'D+', "#f7c72b"
+    if rating >= 5.0:
+        return 'D', "#f78e2b"
+    return 'F', "#f72b2b"
+
+# Calculate match rating
+def compute_event_based_rating(player_events):
+    starting_rating = 6.0
+    total_score = 0.0
+    records = []
+    for _, row in player_events.iterrows():
+        event_type = row.get('type')
+        if pd.isna(event_type):
+            continue
+        if event_type == 'Pass':
+            impact, start_area, end_area, outcome_label = compute_pass_impact(row)
+            area_label = f'{start_area}->{end_area}'
+        elif event_type == 'Shot':
+            impact, outcome_label = compute_shot_impact(row)
+            area_label = 'anywhere'
+        elif event_type == 'Pressure':
+            impact, outcome_label = compute_pressure_impact(row)
+            area_label = 'anywhere'
+        elif event_type == 'Clearance':
+            impact, outcome_label, area_label = compute_clearance_impact(row)
+        elif event_type == 'Block':
+            impact, outcome_label, area_label = compute_block_impact(row)
+        elif event_type == 'Miscontrol':
+            impact, outcome_label, area_label = compute_miscontrol_impact(row)
+        elif event_type == 'Error':
+            impact, outcome_label, area_label = compute_error_impact(row)
+        elif event_type == 'Dispossessed':
+            impact, outcome_label, area_label = compute_dispossessed_impact(row)
+        elif event_type == 'Dribbled Past':
+            impact, outcome_label, area_label = compute_dribbled_past_impact(row)
+        elif event_type == 'Foul Committed':
+            impact, outcome_label, area_label = compute_foul_committed_impact(row)
+        elif event_type == 'Foul Won':
+            impact, outcome_label, area_label = compute_foul_won_impact(row)
+        elif event_type == 'Bad Behaviour':
+            impact, outcome_label, area_label = compute_bad_behaviour_impact(row)
+        elif event_type == 'Offside':
+            impact, outcome_label, area_label = -0.20, 'offside', 'anywhere'
+        elif event_type == 'Ball Recovery':
+            impact, outcome_label, area_label = compute_ball_recovery_impact(row)
+        elif event_type == 'Ball Receipt*':
+            impact, outcome_label, area_label = compute_ball_receipt_impact(row)
+        elif event_type == 'Carry':
+            impact, outcome_label, area_label = compute_carry_impact(row)
+        elif event_type == 'Duel':
+            impact, outcome_label, area_label = compute_duel_impact(row)
+        elif event_type == 'Dribble':
+            impact, outcome_label, area_label = compute_dribble_impact(row)
+        elif event_type == 'Interception':
+            impact, outcome_label, area_label = compute_interception_impact(row)
+        elif event_type == '50/50':
+            impact, outcome_label, area_label = compute_5050_impact(row)
+        else:
+            impact = 0.0
+            outcome_label = 'other'
+            area_label = 'anywhere'
+
+        total_score += impact
+        records.append({
+            'type': event_type,
+            'area': area_label,
+            'outcome': outcome_label,
+            'impact': impact
+        })
+
+    event_count = len([record for record in records if record['impact'] != 0])
+    #if event_count == 0:
+    #    return {'event_rating': starting_rating, 'event_score_raw': 0.0, 'event_grade': infer_grade(starting_rating), 'event_count': 0, 'event_breakdown': pd.DataFrame()}
+    starting_minute = player_events['minute'].min() if 'minute' in player_events.columns else 1.0
+    end_minute = player_events['minute'].max() if 'minute' in player_events.columns else 90.0
+    onpitch_length = max(1.0, end_minute - starting_minute)
+    adjustment_factor = min(max(1.0, (onpitch_length + 30) / 30), 3.0)
+    #print(f"Total raw impact score: {total_score:.2f} over {event_count} impactful events across {onpitch_length:.1f} minutes on pitch.")
+
+    score_adjustment = total_score / adjustment_factor
+    #score_adjustment = total_score / 3
+    rating = np.clip(starting_rating + score_adjustment, 0.0, 10.0)
+
+    breakdown = pd.DataFrame(records)
+    breakdown = breakdown.groupby(['type', 'area', 'outcome'], as_index=False).agg(
+        count=('impact', 'size'),
+        impact=('impact', 'sum')
     )
+    breakdown = breakdown.sort_values('impact', key=np.abs, ascending=False)
+    grade, grade_color = infer_grade(rating)
 
-    if weighted_score >= 85:
-        return "A+"
-    if weighted_score >= 78:
-        return "A"
-    if weighted_score >= 70:
-        return "B"
-    if weighted_score >= 62:
-        return "C"
-    if weighted_score >= 52:
-        return "D"
-    return "F"
-
+    return {
+        'event_rating': rating,
+        'event_score_raw': total_score,
+        'event_grade': grade,
+        'event_grade_color': grade_color,
+        'event_count': event_count,
+        'event_breakdown': breakdown
+    }
+# -------------------------------------Match Rating Functions End------------------------------------
 
 def add_rounded_box(ax, rect, edgecolor, linewidth=1.5):
     x, y, w, h = rect
@@ -381,6 +918,7 @@ def extract_cards(player_info):
 def build_player_card(
     competition_name,
     match_info,
+    player_events,
     context,
     player_data,
     metrics,
@@ -421,10 +959,14 @@ def build_player_card(
 
     cards = extract_cards(context["player_info"])
     card_text = str(len(cards))
-    add_rounded_box(header_ax, (0.76, 0.12, 0.18, 0.52), "#d10000", linewidth=1.2)
-    header_ax.text(0.85, 0.51, "Player", ha="center", va="center", fontsize=22, color="#d10000")
-    header_ax.text(0.85, 0.33, "Rating", ha="center", va="center", fontsize=22, color="#d10000")
-    header_ax.text(0.85, 0.15, "(A+ to F)", ha="center", va="center", fontsize=18, color="#d10000")
+    on_pitch_minutes = int(context.get("time_end", "90")) - int(context.get("time_start", "0"))
+    if on_pitch_minutes > 10:
+        rating_result = compute_event_based_rating(player_events)
+        print(f"{context['display_name']} rating: {rating_result['event_rating']:.1f} ({rating_result['event_grade']})")
+        add_rounded_box(header_ax, (0.72, 0.12, 0.18, 0.52), rating_result['event_grade_color'], linewidth=1.2)
+        header_ax.text(0.81, 0.54, "Rating", ha="center", va="center", fontsize=22, color=rating_result['event_grade_color'])
+        header_ax.text(0.81, 0.34, f"{rating_result['event_rating']:.1f}", ha="center", va="center", fontsize=35, color=rating_result['event_grade_color'])
+        header_ax.text(0.81, 0.17, f"{rating_result['event_grade']}", ha="center", va="center", fontsize=18, color=rating_result['event_grade_color'])
 
     shot_box = (0.04, 0.72, 0.92, 0.038)
     add_rounded_box(canvas_ax, shot_box, "#ff6f00")
@@ -534,7 +1076,7 @@ def build_player_card(
     )
 
     fig.savefig(output_path, dpi=300)
-    plt.show()
+    #plt.show()
 
 
 if __name__ == "__main__":
@@ -551,10 +1093,12 @@ if __name__ == "__main__":
     context = get_player_context(events, lineups, PLAYER_NAME)
     player_data = extract_player_data(events, PLAYER_NAME)
     metrics = compute_metrics(player_data)
+    player_events = events[events['player'] == PLAYER_NAME].copy()
 
     build_player_card(
         competition_name=competition_name,
         match_info=match_info,
+        player_events=player_events,
         context=context,
         player_data=player_data,
         metrics=metrics,
