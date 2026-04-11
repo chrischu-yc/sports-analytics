@@ -1974,6 +1974,7 @@ function buildPlayerCardModel(teamName, playerRealName) {
     gradeColor: gradeInfo.color,
     metrics: {
       shots: shots.length,
+      goals: goals.length,
       xg,
       passesCompleted: successfulPasses.length,
       passesTotal: passes.length,
@@ -2102,7 +2103,7 @@ function renderPlayerCards() {
           </div>
         </div>
 
-        <div class="perf-box perf-box-shots">Shots: ${m.shots} &nbsp;&middot;&nbsp; xG: ${m.xg.toFixed(2)}</div>
+        <div class="perf-box perf-box-shots">Shots: ${m.shots} &nbsp;&middot;&nbsp; Goal: ${m.goals} &nbsp;&middot;&nbsp; xG: ${m.xg.toFixed(2)}</div>
 
         <div class="perf-metric-grid">
           <div class="perf-box perf-box-pass">
