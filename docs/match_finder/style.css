@@ -154,6 +154,12 @@ h2 { font-size: 1.6rem; margin-bottom: .3rem; }
   color: var(--text); font-size: .95rem; outline: none;
 }
 #comp-search:focus { border-color: var(--green-lt); }
+.comp-search-status {
+  margin-top: .45rem;
+  font-size: .8rem;
+  color: var(--muted);
+  min-height: 1.1rem;
+}
 
 /* ── Competition grid ────────────────────────────────────────────── */
 .card-grid {
@@ -340,6 +346,184 @@ canvas { display: block; border-radius: 8px; }
   margin: 0 0 .8rem; padding: 0;
 }
 
+/* ── Player card ─────────────────────────────────────────────────── */
+.playercard-row {
+  display: flex;
+  gap: 1.2rem;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.playercard-col {
+  flex: 1 1 520px;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.perf-card-wrap { width: 100%; }
+.btn-save-card {
+  align-self: flex-end;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .4rem .75rem;
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, opacity .15s;
+}
+.btn-save-card:hover {
+  border-color: var(--green-lt);
+  color: #fff;
+}
+.btn-save-card:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+.perf-card-empty {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.perf-card {
+  background: #e8ebef;
+  color: #111827;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.perf-card-header {
+  background: #a8c7e8;
+  padding: .85rem 1rem 1rem;
+}
+.perf-card-match {
+  font-size: .72rem;
+  text-align: center;
+  color: #1f2937;
+  margin-bottom: .65rem;
+}
+.perf-card-head-row {
+  display: flex;
+  justify-content: space-between;
+  gap: .8rem;
+  align-items: flex-start;
+}
+.perf-card-name {
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1.08;
+}
+.perf-card-role {
+  margin-top: .35rem;
+  font-size: .95rem;
+  color: #334155;
+}
+.perf-rating {
+  border: 1.5px solid #facc15;
+  border-radius: 12px;
+  min-width: 86px;
+  padding: .35rem .5rem;
+  text-align: center;
+}
+.perf-rating-label { font-size: .8rem; }
+.perf-rating-value { font-size: 1.5rem; font-weight: 800; line-height: 1.1; }
+.perf-rating-grade { font-size: .9rem; }
+
+.perf-box {
+  border: 2px solid #64748b;
+  border-radius: 12px;
+  padding: .62rem .82rem;
+  font-size: .86rem;
+  font-weight: 700;
+  line-height: 1.52;
+  background: rgba(255,255,255,0.2);
+}
+.perf-box-shots {
+  margin: .62rem .75rem .35rem;
+  border-color: #f97316;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-align: center;
+}
+.perf-metric-grid {
+  margin: 0 .75rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .58rem;
+}
+.perf-box-pass { border-color: #7c3aed; }
+.perf-box-foul { border-color: #65a30d; }
+.perf-box-dribble { border-color: #2563eb; }
+.perf-box-turnover { border-color: #ef4444; }
+.perf-box-defense { border-color: #d2d431; }
+.perf-box-full { grid-column: 1 / -1; }
+.perf-box-foul-strip {
+  text-align: center;
+  font-size: .95rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.perf-map-grid {
+  margin: .7rem .75rem .75rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .58rem;
+}
+.perf-map-panel {
+  background: rgba(255,255,255,0.28);
+  border-radius: 10px;
+  padding: .45rem;
+}
+.perf-map-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: .88rem;
+  margin-bottom: .35rem;
+}
+.perf-map-canvas {
+  width: 100%;
+  height: 330px;
+  background: #f8fafc;
+  border: 1px solid rgba(15,23,42,0.18);
+  border-radius: 8px;
+}
+.perf-map-legend {
+  display: flex;
+  justify-content: center;
+  gap: .8rem;
+  margin-top: .35rem;
+  font-size: .75rem;
+  color: #1f2937;
+  flex-wrap: wrap;
+}
+.perf-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+}
+.perf-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.perf-red { background: #dc2626; }
+.perf-blue { background: #1d4ed8; }
+.perf-blue-soft { background: rgba(37,99,235,0.35); border: 1px solid rgba(37,99,235,0.7); }
+.perf-legend-line {
+  width: 14px;
+  height: 0;
+  border-top: 2px solid #2563eb;
+  display: inline-block;
+}
+
 /* ── xG Plot ─────────────────────────────────────────────────────── */
 #tab-xgplot.tab-content.active { display: flex; flex-direction: column; gap: 1.2rem; align-items: center; }
 #canvas-xgplot { display: block; border-radius: 8px; background: #1a1a1a; max-width: 100%; }
@@ -508,4 +692,5 @@ canvas { display: block; border-radius: 8px; }
   .bench-row { grid-template-columns: 1fr; }
   .match-card { grid-template-columns: 1fr auto 1fr; }
   .match-meta { display: none; }
+  .perf-map-grid { grid-template-columns: 1fr; }
 }

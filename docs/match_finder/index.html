@@ -26,11 +26,13 @@
       <div class="picker-hero">
         <h1 class="picker-title">Browse Competitions &amp; Seasons</h1>
         <p class="picker-sub">Explore StatsBomb open football match data &mdash; formations, shot maps, passing networks, and more. Powered by StatsBomb open data.</p>
+        <p class="picker-sub">Made by Yu-Chen Chu (Chris)</p>
         <div class="picker-stats" id="picker-stats"></div>
       </div>
 
       <div class="picker-filter">
-        <input type="search" id="comp-search" placeholder="&#128269;  Find competitions&hellip;" autocomplete="off" />
+        <input type="search" id="comp-search" placeholder="&#128269;  Type a team name to find competitions/seasons&hellip;" autocomplete="off" />
+        <p id="comp-search-status" class="comp-search-status"></p>
       </div>
 
       <div class="card-grid" id="comp-grid">
@@ -58,6 +60,7 @@
         <button class="tab" data-tab="passmap">Pass Map</button>
         <button class="tab" data-tab="carrymap">Carry Map</button>
         <button class="tab" data-tab="passnetwork">Pass Network</button>
+        <button class="tab" data-tab="playercard">Player Card</button>
         <button class="tab" data-tab="xgplot">xG Plot</button>
         <button class="tab tab-hidden" id="tab-btn-shootout" data-tab="shootout">Penalty Shootout</button>
         <button class="tab" data-tab="stats">Stats</button>
@@ -171,6 +174,30 @@
         </div>
       </div>
 
+      <!-- Player performance card tab -->
+      <div id="tab-playercard" class="tab-content">
+        <div class="playercard-row">
+          <div class="playercard-col">
+            <div class="passmap-label" id="label-perf-home"></div>
+            <div class="passmap-select-wrap">
+              <select id="select-perf-home" size="1"></select>
+              <p class="passmap-hint">Choose one player to view their full match card</p>
+            </div>
+            <button id="btn-save-perf-home" class="btn-save-card" type="button">Save Card as PNG</button>
+            <div id="perf-card-home" class="perf-card-wrap"></div>
+          </div>
+          <div class="playercard-col">
+            <div class="passmap-label" id="label-perf-away"></div>
+            <div class="passmap-select-wrap">
+              <select id="select-perf-away" size="1"></select>
+              <p class="passmap-hint">Choose one player to view their full match card</p>
+            </div>
+            <button id="btn-save-perf-away" class="btn-save-card" type="button">Save Card as PNG</button>
+            <div id="perf-card-away" class="perf-card-wrap"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- xG Plot tab -->
       <div id="tab-xgplot" class="tab-content">
         <div id="xgplot-summary" class="xgplot-summary"></div>
@@ -227,6 +254,11 @@
       </section>
 
       <section class="modal-section">
+        <h3>🧾 Player Card tab</h3>
+        <p>Compare two players side by side (one from each team). Use each dropdown to pick a player, then view a compact performance card with passing, dribbling, defensive, foul/turnover stats, plus receiving and passing location maps. Keeper specific performance card to come. </p>
+      </section>
+
+      <section class="modal-section">
         <h3>🏃 Carry Map tab</h3>
         <p>Shows every ball carry (≥5 pitch units) for each team. Arrows show the direction of travel. The <strong>circle at the arrow tip</strong> is colour-coded by what happened immediately after the carry: <span style="color:#f97316">&#9632;</span> <strong>Pass</strong>, <span style="color:#eab308">&#9632;</span> <strong>Shot</strong>, <span style="color:#a855f7">&#9632;</span> <strong>Miscontrol / Dispossessed</strong>, <span style="color:#9ca3af">&#9632;</span> <strong>Other</strong>. Use the <strong>player dropdown</strong> to filter by individual player.</p>
       </section>
@@ -266,6 +298,8 @@
   <script src="passmap.js"></script>
   <script src="carrymap.js"></script>
   <script src="passnetwork.js"></script>
+  <script src="playercard.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="xgplot.js"></script>
   <script src="app.js"></script>
 </body>
