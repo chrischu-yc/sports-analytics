@@ -8,6 +8,7 @@ const BASE = 'https://raw.githubusercontent.com/statsbomb/open-data/master/data'
 const TEAM_SEASON_CACHE = new Map();
 let compSearchToken = 0;
 let compSearchDebounceTimer = null;
+const THEME_STORAGE_KEY = 'sb_match_explorer_theme';
 
 // ── State ────────────────────────────────────────────────────────────
 let state = {
@@ -28,6 +29,37 @@ async function fetchJSON(url) {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${url}`);
   return resp.json();
+}
+
+function applyTheme(theme) {
+  const isLight = theme === 'light';
+  document.body.classList.toggle('theme-light', isLight);
+
+  const btn = document.getElementById('btn-theme-toggle');
+  if (!btn) return;
+  btn.textContent = isLight ? 'Use Dark Mode' : 'Use Light Mode';
+  btn.setAttribute('aria-pressed', isLight ? 'true' : 'false');
+}
+
+function toggleTheme() {
+  const nextTheme = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  } catch (_) {
+    // Ignore storage issues and still toggle for this session.
+  }
+  applyTheme(nextTheme);
+}
+
+function initThemePreference() {
+  let saved = 'dark';
+  try {
+    const value = localStorage.getItem(THEME_STORAGE_KEY);
+    if (value === 'light' || value === 'dark') saved = value;
+  } catch (_) {
+    saved = 'dark';
+  }
+  applyTheme(saved);
 }
 
 function normalizeSearchText(value) {
@@ -888,8 +920,10 @@ document.getElementById('comp-search').addEventListener('input', e => {
 // ── Help modal ───────────────────────────────────────────────────────
 (function setupHelpModal() {
   const modal = document.getElementById('help-modal');
+  const themeBtn = document.getElementById('btn-theme-toggle');
   document.getElementById('btn-help').addEventListener('click', () => modal.classList.add('open'));
   document.getElementById('modal-close').addEventListener('click', () => modal.classList.remove('open'));
+  if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.classList.remove('open'); });
 })();
@@ -1186,8 +1220,8 @@ document.getElementById('select-carrymap-away').addEventListener('change', rende
 const PERF_SUCCESS_DUEL_OUTCOMES = new Set(['Won', 'Success', 'Success In Play', 'Success Out']);
 
 function inferPlayerCardGrade(rating) {
-  if (rating >= 8.5) return { grade: 'A+', color: '#1cb530' };
-  if (rating >= 8.0) return { grade: 'A',  color: '#56cc66' };
+  if (rating >= 8.5) return { grade: 'A+', color: '#0b851b' };
+  if (rating >= 8.0) return { grade: 'A',  color: '#3eba4e' };
   if (rating >= 7.5) return { grade: 'B+', color: '#baf72b' };
   if (rating >= 7.0) return { grade: 'B',  color: '#d8f72b' };
   if (rating >= 6.5) return { grade: 'C+', color: '#fcef40' };
@@ -2506,4 +2540,5 @@ async function loadRandomFromEntireDB() {
 document.getElementById('btn-random-global').addEventListener('click', loadRandomFromEntireDB);
 
 // ── Boot ─────────────────────────────────────────────────────────────
+initThemePreference();
 loadCompetitions();

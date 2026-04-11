@@ -5,6 +5,27 @@
  */
 
 function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, matchDuration) {
+  const isLightTheme = document.body.classList.contains('theme-light');
+  const palette = isLightTheme
+    ? {
+        bg: '#f8fafc',
+        gridMajor: 'rgba(15,23,42,0.22)',
+        gridMinor: 'rgba(15,23,42,0.12)',
+        axis: '#334155',
+        axisLabel: '#475569',
+        goalStroke: '#ffffff',
+        goalLabelStroke: 'rgba(255,255,255,0.85)',
+      }
+    : {
+        bg: '#1a1a1a',
+        gridMajor: 'rgba(255,255,255,0.28)',
+        gridMinor: 'rgba(255,255,255,0.16)',
+        axis: '#ccc',
+        axisLabel: '#aaa',
+        goalStroke: '#000',
+        goalLabelStroke: 'rgba(0,0,0,0.75)',
+      };
+
   const dpr = window.devicePixelRatio || 1;
   if (!canvasEl.dataset.cssW) {
     canvasEl.dataset.cssW = canvasEl.clientWidth  || canvasEl.width;
@@ -27,13 +48,13 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
   const chartH = h - margin.top - margin.bottom;
 
   // Background
-  ctx.fillStyle = '#1a1a1a';
+  ctx.fillStyle = palette.bg;
   ctx.fillRect(0, 0, w, h);
 
   // Grid: use stronger major lines and lighter minor lines for readability
   const drawGridLine = (x1, y1, x2, y2, isMajor) => {
     ctx.beginPath();
-    ctx.strokeStyle = isMajor ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.16)';
+    ctx.strokeStyle = isMajor ? palette.gridMajor : palette.gridMinor;
     ctx.lineWidth = isMajor ? 1.25 : 0.9;
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
@@ -64,7 +85,7 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
   }
 
   // Axes
-  ctx.strokeStyle = '#ccc';
+  ctx.strokeStyle = palette.axis;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(margin.left, margin.top);
@@ -73,7 +94,7 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
   ctx.stroke();
 
   // Axis labels
-  ctx.fillStyle = '#aaa';
+  ctx.fillStyle = palette.axisLabel;
   ctx.font = '12px sans-serif';
   ctx.textAlign = 'center';
 
@@ -141,7 +162,7 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
 
       // Draw star
       ctx.fillStyle = color;
-      ctx.strokeStyle = '#000';
+      ctx.strokeStyle = palette.goalStroke;
       ctx.lineWidth = 1;
       _drawStar(ctx, x, y, 8);
 
@@ -156,7 +177,7 @@ function drawXGPlot(canvasEl, homeTeam, awayTeam, homeTeamShots, awayTeamShots, 
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'bottom';
-      ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+      ctx.strokeStyle = palette.goalLabelStroke;
       ctx.lineWidth = 3;
       ctx.strokeText(label, x - 10, y - 10);
       ctx.fillStyle = color;

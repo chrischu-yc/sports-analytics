@@ -22,6 +22,41 @@ body {
   color: var(--text);
   font-family: 'Segoe UI', system-ui, sans-serif;
   min-height: 100vh;
+  transition: background .2s ease, color .2s ease;
+}
+
+body.theme-light {
+  --dark: #f3f6fb;
+  --surface: #ffffff;
+  --card: #eef3f8;
+  --border: #cfd8e3;
+  --text: #0f172a;
+  --muted: #475569;
+  --green: #2d7a3a;
+  --green-lt: #3e9a4d;
+  --accent: #d97706;
+  --red: #dc2626;
+  --blue: #2563eb;
+}
+body.theme-light .logo { color: #1d4f7d; }
+body.theme-light .picker-hero {
+  background: linear-gradient(135deg, #fff9ec 0%, #eef6ff 55%, #e8f7ef 100%);
+  border-color: #d7e2ee;
+}
+body.theme-light .picker-hero::before {
+  background-image:
+    repeating-linear-gradient(90deg, rgba(15,23,42,.045) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(0deg,  rgba(15,23,42,.045) 0 1px, transparent 1px 64px);
+}
+body.theme-light .picker-title {
+  background: linear-gradient(120deg, #0f766e 0%, #0369a1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+body.theme-light .picker-stat {
+  background: rgba(15,23,42,.045);
+  border-color: rgba(15,23,42,.15);
 }
 
 /* ── Header ──────────────────────────────────────────────────────── */
@@ -76,6 +111,23 @@ header {
   transition: color .15s;
 }
 .modal-close:hover { color: var(--text); }
+.btn-theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 3.2rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: .75rem;
+  font-weight: 700;
+  padding: .34rem .55rem;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.btn-theme-toggle:hover {
+  border-color: var(--green-lt);
+}
 .modal-section { margin-bottom: 1.3rem; }
 .modal-section h3 { font-size: 1rem; margin-bottom: .35rem; color: var(--green-lt); }
 .modal-section p { font-size: .88rem; color: var(--muted); line-height: 1.65; }
@@ -461,7 +513,7 @@ canvas { display: block; border-radius: 8px; }
 .perf-box-foul { border-color: #65a30d; }
 .perf-box-dribble { border-color: #2563eb; }
 .perf-box-turnover { border-color: #ef4444; }
-.perf-box-defense { border-color: #d2d431; }
+.perf-box-defense { border-color: #c6c614; }
 .perf-box-full { grid-column: 1 / -1; }
 .perf-box-foul-strip {
   text-align: center;
@@ -527,6 +579,7 @@ canvas { display: block; border-radius: 8px; }
 /* ── xG Plot ─────────────────────────────────────────────────────── */
 #tab-xgplot.tab-content.active { display: flex; flex-direction: column; gap: 1.2rem; align-items: center; }
 #canvas-xgplot { display: block; border-radius: 8px; background: #1a1a1a; max-width: 100%; }
+body.theme-light #canvas-xgplot { background: #f8fafc; border: 1px solid #d6e2ef; }
 .xgplot-summary {
   width: 100%; max-width: 960px;
   background: var(--surface); border-radius: 8px;
@@ -543,6 +596,7 @@ canvas { display: block; border-radius: 8px; }
   padding: .8rem; background: rgba(255,255,255,0.03); border-radius: 8px;
   border: 1px solid var(--border);
 }
+body.theme-light .xg-team { background: rgba(15,23,42,0.035); }
 .xg-team-name {
   font-size: .86rem;
   color: var(--muted);
@@ -554,7 +608,7 @@ canvas { display: block; border-radius: 8px; }
 .xg-away { border-left: 4px solid #ef4444; }
 .xg-goals {
   font-size: 2rem; font-weight: 700; margin-bottom: .2rem;
-  color: #fff;
+  color: var(--text);
 }
 .xg-stat { font-size: .85rem; color: var(--muted); }
 .xg-divider {
@@ -566,6 +620,7 @@ canvas { display: block; border-radius: 8px; }
   padding: .8rem; background: rgba(255,255,255,0.03); border-radius: 8px;
   border: 1px solid var(--border);
 }
+body.theme-light .xg-probs { background: rgba(15,23,42,0.035); }
 .xg-prob {
   flex: 1; text-align: center;
   padding: .5rem; border-radius: 6px;
@@ -574,7 +629,7 @@ canvas { display: block; border-radius: 8px; }
 .xg-home-prob { background: rgba(96,165,250,0.1); }
 .xg-draw-prob { background: rgba(156,163,175,0.1); }
 .xg-away-prob { background: rgba(239,68,68,0.1); }
-.xg-prob strong { font-size: 1.1rem; color: #fff; display: block; margin-bottom: .2rem; }
+.xg-prob strong { font-size: 1.1rem; color: var(--text); display: block; margin-bottom: .2rem; }
 
 /* ── Penalty shootout ───────────────────────────────────────────── */
 .shootout-card {
@@ -721,6 +776,13 @@ canvas { display: block; border-radius: 8px; }
 }
 
 @media (max-width: 640px) {
+  .btn-theme-toggle {
+    right: 2.8rem;
+    top: .85rem;
+    font-size: .7rem;
+    padding: .28rem .45rem;
+  }
+
   .header-inner {
     padding: .65rem .85rem;
     gap: .55rem;
