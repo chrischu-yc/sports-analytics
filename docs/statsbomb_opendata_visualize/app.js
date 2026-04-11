@@ -1880,11 +1880,19 @@ function getPlayerCardSymbols(playerEvents) {
     const badCard = e.bad_behaviour?.card?.name;
     const card = foulCard || badCard;
     if (!card) continue;
-    if (card === 'Yellow Card') cards.push('YC');
-    if (card === 'Red Card') cards.push('RC');
-    if (card === 'Second Yellow') cards.push('2YC');
+    if (card === 'Yellow Card') cards.push('One Yellow');
+    if (card === 'Red Card') cards.push('Red');
+    if (card === 'Second Yellow') cards.push('Double Yellow');
   }
   return [...new Set(cards)];
+}
+
+function getPlayerCardColor(cards) {
+  if (!Array.isArray(cards) || cards.length === 0) return 'var(--muted)';
+  if (cards.includes('Red')) return '#ef4444';
+  if (cards.includes('Double Yellow')) return '#f59e0b';
+  if (cards.includes('One Yellow')) return '#facc15';
+  return 'var(--muted)';
 }
 
 function buildPlayerCardModel(teamName, playerRealName) {
@@ -2075,6 +2083,7 @@ function renderPlayerCards() {
     const model = buildPlayerCardModel(teamName, playerRealName);
     const m = model.metrics;
     const cardText = model.cards.length ? model.cards.join(' ') : 'None';
+    const cardColor = getPlayerCardColor(model.cards);
     const ratingText = model.playedMinutes > 10 ? model.rating.toFixed(1) : 'N/A';
     const gradeText = model.playedMinutes > 10 ? model.grade : 'N/A';
     const gradeColor = model.playedMinutes > 10 ? model.gradeColor : 'var(--muted)';
@@ -2128,7 +2137,7 @@ function renderPlayerCards() {
             <div>Miscontrol: ${m.miscontrol}</div>
           </div>
           <div class="perf-box perf-box-foul perf-box-full perf-box-foul-strip">
-            Fouls: ${m.foulsCommitted} &nbsp;&middot;&nbsp; Was fouled: ${m.wasFouled} &nbsp;&middot;&nbsp; Cards: ${cardText}
+            Fouls: ${m.foulsCommitted} &nbsp;&middot;&nbsp; Was fouled: ${m.wasFouled} &nbsp;&middot;&nbsp; <span style="color:${cardColor}">Cards: ${cardText}</span>
           </div>
         </div>
 
