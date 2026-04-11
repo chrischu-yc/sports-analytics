@@ -86,7 +86,6 @@ def get_player_context(events, lineups, player_name):
         "player_info": player_info,
     }
 
-
 def extract_player_data(events, player_name):
     passes = events[(events["type"] == "Pass") & (events["player"] == player_name)].copy()
     dribbles = events[(events["type"] == "Dribble") & (events["player"] == player_name)].copy()
@@ -151,6 +150,7 @@ def compute_metrics(player_data):
     shots = player_data["shots"]
     interceptions = player_data["interceptions"]
     tackles = player_data["tackles"]
+    blocks = player_data["blocks"]
 
     successful_passes = passes[passes["pass_outcome"].isna()]
     long_passes = passes[passes["pass_length"] > 30] if "pass_length" in passes.columns else passes.iloc[0:0]
@@ -188,6 +188,10 @@ def compute_metrics(player_data):
         tackles["duel_outcome"].isin(success_outcomes)
     ] if "duel_outcome" in tackles.columns else tackles.iloc[0:0]
 
+    block_valid = blocks[
+        blocks["block_deflection"].isna() & blocks["block_offensive"].isna()
+    ] if not blocks.empty else blocks
+
     return {
         "passes_completed": len(successful_passes),
         "passes_total": len(passes),
@@ -208,8 +212,13 @@ def compute_metrics(player_data):
         "goals": len(goals),
         "xg": shots_xg,
         "interception_success": safe_rate(len(successful_interceptions), len(interceptions)),
+        "success_interceptions": len(successful_interceptions),
+        "total_interceptions": len(interceptions),
         "tackle_success": safe_rate(len(successful_tackles), len(tackles)),
+        "success_tackles": len(successful_tackles),
+        "total_tackles": len(tackles),
         "pressures": len(player_data["pressures"]),
+        "blocks": len(block_valid),
         "clearances": len(player_data["clearances"]),
         "recoveries": len(player_data["recoveries"]),
         "fouls_committed": len(player_data["fouls_committed"]),
@@ -337,6 +346,69 @@ def compute_pass_impact(event_row):
         outcome_label = 'complete_neutral' if impact == 0 else 'complete_' + '+'.join(components)
         return impact, start_area, end_area, outcome_label
     return 0.0, start_area, end_area, 'pass_other'
+# Goalkeeper passing
+def compute_goalkeeper_pass_impact(event_row):
+    start_loc = event_row.get('location')
+    end_loc = event_row.get('pass_end_location')
+    start_area = classify_pitch_area(start_loc)
+    end_area = classify_pitch_area(end_loc)
+
+    pass_outcome = event_row.get('pass_outcome')
+    complete = pd.isna(pass_outcome)
+    incomplete = pass_outcome == 'Incomplete'
+    out_pass = pass_outcome == 'Out'
+    goalkick = event_row.get('pass_type') == 'Goal Kick'
+    impact = 0.0
+
+    if bool(event_row.get('pass_shot_assist') == True):
+        impact += PASS_POSITIVE_WEIGHTS['shot_assist']
+    if bool(event_row.get('pass_goal_assist') == True):
+        impact += PASS_POSITIVE_WEIGHTS['goal_assist']
+
+    if goalkick:
+        if end_area in {'final_third', 'opposition_box'}:
+            if complete:
+                return impact + 0.08, start_area, end_area, 'goalkick_long_complete'
+            if incomplete or out_pass:
+                return impact - 0.005, start_area, end_area, 'goalkick_long_incomplete'
+            else:
+                return impact, start_area, end_area, 'goalkick_long_neutral'
+        if end_area == 'middle_third':
+            if complete:
+                return impact + 0.04, start_area, end_area, 'goalkick_mid_complete'
+            if incomplete or out_pass:
+                return impact - 0.01, start_area, end_area, 'goalkick_mid_incomplete'
+            else:
+                return impact, start_area, end_area, 'goalkick_mid_neutral'
+        if end_area in {'own_third', 'own_box'}:
+            if complete:
+                return impact + 0.005, start_area, end_area, 'goalkick_short_complete'
+            if incomplete or out_pass:
+                return impact - 0.02, start_area, end_area, 'goalkick_short_incomplete'
+            else:
+                return impact, start_area, end_area, 'goalkick_short_neutral'
+    else:
+        if end_area in {'final_third', 'opposition_box'}:
+            if complete:
+                return impact + 0.08, start_area, end_area, 'long_pass_complete'
+            if incomplete or out_pass:
+                return impact - 0.005, start_area, end_area, 'long_pass_incomplete'
+            else:
+                return impact, start_area, end_area, 'long_pass_neutral'
+        if end_area == 'middle_third':
+            if complete:
+                return impact + 0.04, start_area, end_area, 'mid_pass_complete'
+            if incomplete or out_pass:
+                return impact - 0.01, start_area, end_area, 'mid_pass_incomplete'
+            else:
+                return impact, start_area, end_area, 'mid_pass_neutral'
+        if end_area in {'own_third', 'own_box'}:
+            if complete:
+                return impact + 0.005, start_area, end_area, 'short_pass_complete'
+            if incomplete or out_pass:
+                return impact - 0.02, start_area, end_area, 'short_pass_incomplete'
+            else:
+                return impact, start_area, end_area, 'short_pass_neutral'
 
 # Shot impact calculation
 SHOT_OUTCOME_GROUPS = {
@@ -664,6 +736,93 @@ def compute_5050_impact(event_row):
         return -0.05, '50/50_lost', area
     return 0.0, '50/50_no_impact', area
 
+# Own Goal
+def compute_own_goal_impact(event_row):
+    return -1.5, 'own_goal', classify_pitch_area(event_row.get('location'))
+
+# Goal keepeing actions
+def classify_goalkeeping_action_area(location): # 6-yard box, box, outside of box
+    if not isinstance(location, list) or len(location) < 2:
+        return 'anywhere'
+    x, y = location[0], location[1]
+    if x <=6 and 30 <= y <= 50:
+        return 'six_yard_box'
+    if x <= 18 and 18 <= y <= 62:
+        return 'box'
+    return 'outside_box'
+def find_shot_from_goalkeeping_action(event_row):
+    # Find the last shot before this goalkeeping action and return its xG
+    event_minute = event_row.get('minute', 0)
+    event_second = event_row.get('second', 0)
+
+    prior_shots = events[
+        (events['type'] == 'Shot') &
+        (
+            (events['minute'] < event_minute) |
+            ((events['minute'] == event_minute) & (events['second'] < event_second))
+        )
+    ]
+    if prior_shots.empty:
+        return None
+    last_shot = prior_shots.iloc[-1]
+    shot_xg = last_shot.get('shot_statsbomb_xg')  # fixed column name
+    return float(shot_xg) if pd.notna(shot_xg) else None
+def compute_goalkeeping_impact(event_row):
+    action_type = event_row.get('goalkeeper_type')
+    outcome = event_row.get('goalkeeper_outcome')
+    area = classify_goalkeeping_action_area(event_row.get('location'))
+    if action_type == 'Collected':
+        if outcome == 'Fail':
+            return -0.10, 'goalkeeping_failed_collection', area
+        else:
+            return 0.02, 'goalkeeping_successful_collection', area
+    if action_type == 'Keeper Sweeper':
+        if outcome in {'Won', 'Claim'}:
+            return 0.05, 'goalkeeping_sweeper_retain', area
+        else:
+            return 0.01, 'goalkeeping_sweeper_clear', area
+    if action_type == 'Punch':
+        if outcome in {'Success', 'In Play Safe', 'Punched Out'}:
+            return 0.03, 'goalkeeping_successful_punch', area
+        else:
+            return -0.05, 'goalkeeping_failed_punch', area
+    if action_type == 'Goal Conceded':
+        shot_xg = find_shot_from_goalkeeping_action(event_row)
+        if shot_xg is not None:
+            xg_factor = min((1 - shot_xg) * 2, 0.5)
+            return -0.50 * xg_factor, 'goal_conceded_with_xg_factor', area
+        return -0.50, 'goal_conceded', area
+    if action_type == 'Penalty Conceded':
+        return -0.20, 'penalty_conceded', area
+    if (action_type == 'Penalty Saved') or (action_type == 'Penalty Saved To Post'):
+        return 1.5, 'penalty_saved', area
+    if action_type == 'Smother':
+        if outcome in {'Won', 'Success'}:
+            return 0.10, 'goalkeeping_successful_smother', area
+        else:
+            return -0.50, 'goalkeeping_failed_smother', area
+    if action_type == 'Shot Saved' or action_type == 'Shot Saved To Post':
+        impact = 0.10
+        shot_xg = find_shot_from_goalkeeping_action(event_row)
+        if shot_xg is not None:
+            impact += 0.50 * shot_xg
+        if outcome == 'In Play Danger':
+            impact -= 0.05
+        return impact, 'shot_saved', area
+    if action_type == 'Shot Saved Off T':
+        impact = 0.05
+        shot_xg = find_shot_from_goalkeeping_action(event_row)
+        if shot_xg is not None:
+            impact += 0.20 * shot_xg
+        if outcome == 'Touched Out':
+            impact -= 0.05
+        return impact, 'off_target_shot_saved', area
+    if action_type == 'Save' or action_type == 'Saved To Post':
+        if outcome == 'In Play Danger':
+            return 0.01, 'save_in_play_danger', area
+        return 0.03, 'save', area
+    return 0.0, 'goalkeeping_other', area
+
 def infer_grade(rating):
     if rating >= 8.5:
         return 'A+', "#1cb530"
@@ -685,6 +844,7 @@ def infer_grade(rating):
 
 # Calculate match rating
 def compute_event_based_rating(player_events):
+    is_goalkeeper = player_events['position'].iloc[0].lower() == 'Goalkeeper' if 'position' in player_events.columns else False
     starting_rating = 6.0
     total_score = 0.0
     records = []
@@ -693,8 +853,12 @@ def compute_event_based_rating(player_events):
         if pd.isna(event_type):
             continue
         if event_type == 'Pass':
-            impact, start_area, end_area, outcome_label = compute_pass_impact(row)
-            area_label = f'{start_area}->{end_area}'
+            if is_goalkeeper:
+                impact, start_area, end_area, outcome_label = compute_goalkeeper_pass_impact(row)
+                area_label = f'{start_area}->{end_area}'
+            else:
+                impact, start_area, end_area, outcome_label = compute_pass_impact(row)
+                area_label = f'{start_area}->{end_area}'
         elif event_type == 'Shot':
             impact, outcome_label = compute_shot_impact(row)
             area_label = 'anywhere'
@@ -735,6 +899,10 @@ def compute_event_based_rating(player_events):
             impact, outcome_label, area_label = compute_interception_impact(row)
         elif event_type == '50/50':
             impact, outcome_label, area_label = compute_5050_impact(row)
+        elif event_type == 'Own Goal Against':
+            impact, outcome_label, area_label = compute_own_goal_impact(row)
+        elif event_type == 'Goal Keeper':
+            impact, outcome_label, area_label = compute_goalkeeping_impact(row)
         else:
             impact = 0.0
             outcome_label = 'other'
@@ -758,7 +926,6 @@ def compute_event_based_rating(player_events):
     #print(f"Total raw impact score: {total_score:.2f} over {event_count} impactful events across {onpitch_length:.1f} minutes on pitch.")
 
     score_adjustment = total_score / adjustment_factor
-    #score_adjustment = total_score / 3
     rating = np.clip(starting_rating + score_adjustment, 0.0, 10.0)
 
     breakdown = pd.DataFrame(records)
@@ -958,7 +1125,12 @@ def build_player_card(
     )
 
     cards = extract_cards(context["player_info"])
-    card_text = str(len(cards))
+    cards_display = []
+    for c in cards:
+        if c == 'Yellow Card':
+            cards_display.append("🟨 ")
+        elif c == 'Red Card':
+            cards_display.append("🟥 ")
     on_pitch_minutes = int(context.get("time_end", "90")) - int(context.get("time_start", "0"))
     if on_pitch_minutes > 10:
         rating_result = compute_event_based_rating(player_events)
@@ -988,7 +1160,7 @@ def build_player_card(
         bottom_pad=0.15,
     )
 
-    fouls_box = (0.56, 0.57, 0.40, 0.12)
+    fouls_box = (0.56, 0.56, 0.40, 0.13)
     add_rounded_box(canvas_ax, fouls_box, "#67b346")
     draw_box_rows(
         canvas_ax,
@@ -996,12 +1168,12 @@ def build_player_card(
         [
             f"Fouls:  {metrics['fouls_committed']}",
             f"Was Fouled:  {metrics['was_fouled']}",
-            f"Cards:  {card_text}",
+            f"Cards:  {''.join(cards_display) if cards_display else 'None'}",
         ],
         fontsize=22,
     )
 
-    dribble_box = (0.04, 0.40, 0.48, 0.075)
+    dribble_box = (0.04, 0.38, 0.48, 0.10)
     add_rounded_box(canvas_ax, dribble_box, "#0070d6")
     draw_box_rows(
         canvas_ax,
@@ -1015,7 +1187,7 @@ def build_player_card(
         bottom_pad=0.28,
     )
 
-    turnover_box = (0.56, 0.40, 0.40, 0.13)
+    turnover_box = (0.56, 0.38, 0.40, 0.15)
     add_rounded_box(canvas_ax, turnover_box, "#ff0000")
     draw_box_rows(
         canvas_ax,
@@ -1026,6 +1198,23 @@ def build_player_card(
             f"Miscontrol:  {metrics['miscontrol']}",
         ],
         fontsize=22,
+    )
+
+    defense_box = (0.04, 0.07, 0.33, 0.27)
+    add_rounded_box(canvas_ax, defense_box, "#009933")
+    draw_box_rows(
+        canvas_ax,
+        defense_box,
+        [
+            f"Pressure:  {metrics['pressures']}",
+            #f"Interception:  {metrics['success_interceptions']}/{metrics['total_interceptions']}",
+            f"Tackle:  {metrics['success_tackles']}/{metrics['total_tackles']}",
+            f"Clearance:  {metrics['clearances']}",
+            f"Block:  {metrics['blocks']}",
+        ],
+        fontsize=22,
+        top_pad=0.85,
+        bottom_pad=0.15,
     )
 
     pass_receiving_xy = to_xy_frame(player_data["pass_receptions"], "pass_end_location")
@@ -1044,7 +1233,7 @@ def build_player_card(
     map_gap = 0.025
     map_x0 = 0.045
 
-    draw_vertical_map_panel(
+    '''draw_vertical_map_panel(
         fig,
         [map_x0, map_y, map_w, map_h],
         "Defensive Action",
@@ -1056,11 +1245,11 @@ def build_player_card(
             {"label": "Block", "data": to_xy_frame(player_data["blocks"], "location"), "color": "#6d597a", "size": 18},
         ],
         legend_ncol=2,
-    )
+    )'''
 
     draw_vertical_map_panel(
         fig,
-        [map_x0 + map_w + map_gap, map_y, map_w, map_h],
+        [map_x0 + map_w + 3*map_gap, map_y, map_w, map_h],
         "Ball Receiving",
         [
             {"label": "Pass reception", "data": pass_receiving_xy, "color": "#d62828", "size": 22},
@@ -1070,7 +1259,7 @@ def build_player_card(
 
     draw_vertical_passing_map_panel(
         fig,
-        [map_x0 + 2 * (map_w + map_gap), map_y, map_w, map_h],
+        [map_x0 + 2 * (map_w + map_gap) + map_gap, map_y, map_w, map_h],
         "Passing Map",
         pass_segments,
     )
