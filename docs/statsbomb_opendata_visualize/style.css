@@ -840,6 +840,18 @@ body.theme-light .xg-probs { background: rgba(15,23,42,0.035); }
   .passmap-row {
     gap: 1rem;
   }
+  .playercard-col {
+    flex: 1 1 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .perf-card-wrap {
+    display: flex;
+    justify-content: center;
+  }
+  .perf-card {
+    width: min(92vw, 360px);
+  }
   .shotmap-col,
   .passmap-col {
     width: 100%;
