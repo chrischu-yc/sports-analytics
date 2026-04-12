@@ -4,17 +4,19 @@
 
 function _perfSetupCanvas(canvasEl) {
   const dpr = window.devicePixelRatio || 1;
-  if (!canvasEl.dataset.cssW) {
-    canvasEl.dataset.cssW = canvasEl.clientWidth || canvasEl.width;
-    canvasEl.dataset.cssH = canvasEl.clientHeight || canvasEl.height;
+  const fallbackW = Number(canvasEl.dataset.cssW) || canvasEl.width || 240;
+  const fallbackH = Number(canvasEl.dataset.cssH) || canvasEl.height || 330;
+  const cssW = canvasEl.clientWidth || fallbackW;
+  const cssH = canvasEl.clientHeight || fallbackH;
+
+  // Cache the latest measurable display size for cases where the element is hidden.
+  if (canvasEl.clientWidth > 0 && canvasEl.clientHeight > 0) {
+    canvasEl.dataset.cssW = String(canvasEl.clientWidth);
+    canvasEl.dataset.cssH = String(canvasEl.clientHeight);
   }
-  const cssW = +canvasEl.dataset.cssW;
-  const cssH = +canvasEl.dataset.cssH;
 
   canvasEl.width = cssW * dpr;
   canvasEl.height = cssH * dpr;
-  canvasEl.style.width = cssW + 'px';
-  canvasEl.style.height = cssH + 'px';
 
   const ctx = canvasEl.getContext('2d');
   ctx.scale(dpr, dpr);

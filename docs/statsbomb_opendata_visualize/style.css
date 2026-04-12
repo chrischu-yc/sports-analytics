@@ -780,10 +780,12 @@ body.theme-light .xg-probs { background: rgba(15,23,42,0.035); }
   }
 
   .btn-theme-toggle {
-    right: 2.8rem;
-    top: .85rem;
-    font-size: .7rem;
-    padding: .28rem .45rem;
+    position: static;
+    display: block;
+    width: 100%;
+    margin: 0 0 .85rem 0;
+    font-size: .74rem;
+    padding: .34rem .45rem;
   }
 
   .header-inner {
@@ -851,6 +853,34 @@ body.theme-light .xg-probs { background: rgba(15,23,42,0.035); }
   }
   .perf-card {
     width: min(92vw, 360px);
+  }
+  .perf-box {
+    font-size: .74rem;
+    line-height: 1.35;
+    padding: .5rem .6rem;
+  }
+  .perf-box-shots {
+    font-size: .82rem;
+  }
+  .perf-box-foul-strip {
+    font-size: .78rem;
+  }
+  .perf-metric-grid {
+    gap: .44rem;
+  }
+  .perf-map-grid {
+    gap: .44rem;
+  }
+  .perf-map-canvas {
+    height: auto;
+    aspect-ratio: 240 / 330;
+  }
+  .perf-map-title {
+    font-size: .78rem;
+  }
+  .perf-map-legend {
+    font-size: .68rem;
+    gap: .45rem;
   }
   .shotmap-col,
   .passmap-col {
