@@ -757,6 +757,28 @@ body.theme-light .xg-probs { background: rgba(15,23,42,0.035); }
 }
 
 @media (max-width: 640px) {
+  .modal-box {
+    padding: 1.2rem;
+  }
+  .modal-title {
+    font-size: 1.1rem;
+    margin-bottom: .9rem;
+  }
+  .modal-section {
+    margin-bottom: 1rem;
+  }
+  .modal-section h3 {
+    font-size: .9rem;
+  }
+  .modal-section p {
+    font-size: .8rem;
+    line-height: 1.5;
+  }
+  .modal-footer p {
+    font-size: .72rem;
+    line-height: 1.45;
+  }
+
   .btn-theme-toggle {
     right: 2.8rem;
     top: .85rem;
