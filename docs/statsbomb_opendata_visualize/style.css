@@ -744,30 +744,11 @@ body.theme-light .xg-probs { background: rgba(15,23,42,0.035); }
 /* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 860px) {
   .tabs {
-    position: relative;
     overflow-x: auto;
     overflow-y: hidden;
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
-  }
-  .tabs::before,
-  .tabs::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 1px;
-    width: 18px;
-    pointer-events: none;
-    z-index: 2;
-  }
-  .tabs::before {
-    left: 0;
-    background: linear-gradient(to right, var(--dark), rgba(17,24,39,0));
-  }
-  .tabs::after {
-    right: 0;
-    background: linear-gradient(to left, var(--dark), rgba(17,24,39,0));
   }
   .tab {
     flex: 0 0 auto;
@@ -833,8 +814,34 @@ body.theme-light .xg-probs { background: rgba(15,23,42,0.035); }
   }
 
   .pitch-row { flex-direction: column; }
+  .shotmap-row,
+  .passmap-row {
+    gap: 1rem;
+  }
+  .shotmap-col,
+  .passmap-col {
+    width: 100%;
+    max-width: 100%;
+  }
+  .shotmap-col canvas {
+    width: min(100%, 400px);
+    height: auto;
+    margin-inline: auto;
+  }
+  .passmap-col canvas {
+    width: min(100%, 480px);
+    height: auto;
+    margin-inline: auto;
+  }
+  .passmap-select-wrap,
+  .passmap-stats {
+    width: 100%;
+    max-width: 480px;
+  }
+  .passmap-select-wrap select {
+    min-width: 0;
+  }
   .bench-row { grid-template-columns: 1fr; }
   .match-card { grid-template-columns: 1fr auto 1fr; }
   .match-meta { display: none; }
-  .perf-map-grid { grid-template-columns: 1fr; }
 }
