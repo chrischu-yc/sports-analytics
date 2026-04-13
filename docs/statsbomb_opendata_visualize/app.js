@@ -354,7 +354,17 @@ function renderMatchList(matches) {
     list.innerHTML = '<p style="color:var(--muted)">No matches found.</p>';
     return;
   }
-  for (const m of matches) {
+  const sortedMatches = [...matches].sort((a, b) => {
+    const aTs = Date.parse(a.match_date || '') || 0;
+    const bTs = Date.parse(b.match_date || '') || 0;
+    if (bTs !== aTs) return bTs - aTs; // newer matches first
+
+    const aId = Number(a.match_id) || 0;
+    const bId = Number(b.match_id) || 0;
+    return bId - aId;
+  });
+
+  for (const m of sortedMatches) {
     const card = document.createElement('div');
     card.className = 'match-card';
     card.innerHTML = `
@@ -1307,7 +1317,8 @@ function inferPlayerCardGrade(rating) {
 }
 
 function getMatchDurationMinute() {
-  return Math.max(...state.events.map(e => e.minute || 0), 90);
+  const regulationEvents = state.events.filter(e => Number(e.period ?? 0) !== 5);
+  return Math.max(...regulationEvents.map(e => e.minute || 0), 90);
 }
 
 function computePassLength(passEvent) {
@@ -1867,7 +1878,10 @@ function perfComputeGoalkeepingImpact(eventRow) {
 
 function perfComputeEventBasedRating(playerEvents, positionName) {
   const isGoalkeeper = String(positionName ?? '').toLowerCase() === 'goalkeeper';
-  const orderedEvents = [...playerEvents].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  // Defensive guard: ensure shootout events never influence match ratings.
+  const orderedEvents = [...playerEvents]
+    .filter(e => Number(e.period ?? 0) !== 5)
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
   const startingRating = 6.0;
   let totalScore = 0.0;
@@ -2140,6 +2154,16 @@ function initPlayerCardDropdowns(homeName, awayName) {
     if (!players.length) players = state.lineups[teamName] ?? [];
     players.sort((a, b) => (a.jersey_number ?? 999) - (b.jersey_number ?? 999));
 
+    const teamEvents = state.events.filter(e => e.team?.name === teamName);
+    const eventsByPlayer = new Map();
+    for (const e of teamEvents) {
+      const playerName = e.player?.name;
+      if (!playerName) continue;
+      if (!eventsByPlayer.has(playerName)) eventsByPlayer.set(playerName, []);
+      eventsByPlayer.get(playerName).push(e);
+    }
+    const matchDuration = getMatchDurationMinute();
+
     sel.innerHTML = '';
     if (!players.length) {
       const opt = document.createElement('option');
@@ -2150,9 +2174,15 @@ function initPlayerCardDropdowns(homeName, awayName) {
     }
 
     for (const p of players) {
+      const playerEvents = eventsByPlayer.get(p.real_name) ?? [];
+      const onPitch = getPlayerOnPitchWindow(teamName, p.real_name, matchDuration);
+      const playedMinutes = Math.max(0, onPitch.end - onPitch.start);
+      const rating = perfComputeEventBasedRating(playerEvents, p.position).eventRating;
+      const ratingLabel = playedMinutes > 10 && Number.isFinite(rating) ? rating.toFixed(1) : 'N/A';
+
       const opt = document.createElement('option');
       opt.value = p.real_name;
-      opt.textContent = `${p.jersey_number}. ${p.player_name}`;
+      opt.textContent = `${p.jersey_number}. ${p.player_name} · ${ratingLabel}`;
       sel.appendChild(opt);
     }
 
