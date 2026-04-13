@@ -110,14 +110,16 @@ function dot(ctx, x, y, r, color) {
 }
 
 /**
- * drawFormation(canvasEl, lineup, formation, teamColor, gkColor)
+ * drawFormation(canvasEl, lineup, formation, teamColor, gkColor, playerRatings, playerRatingColors)
  *
- * lineup: array of { player_name, jersey_number, position_id, start_reason, end_reason }
+ * lineup: array of { player_name, real_name, jersey_number, position_id, start_reason, end_reason }
  * formation: string like "4-3-3"
  * teamColor: hex or css color for outfield players
  * gkColor:   hex or css color for goalkeeper
+ * playerRatings: object keyed by player name with numeric match ratings
+ * playerRatingColors: object keyed by player name with grade color strings
  */
-function drawFormation(canvasEl, lineup, formation, teamColor, gkColor) {
+function drawFormation(canvasEl, lineup, formation, teamColor, gkColor, playerRatings = null, playerRatingColors = null) {
   const dpr = window.devicePixelRatio || 1;
   if (!canvasEl.dataset.cssW) {
     canvasEl.dataset.cssW = canvasEl.clientWidth || canvasEl.width;
@@ -157,6 +159,10 @@ function drawFormation(canvasEl, lineup, formation, teamColor, gkColor) {
 
   const sx = lw / PITCH_WID;
   const sy = lh / PITCH_LEN;
+  const compactBadge = lw <= 320;
+  const badgeFontPx = compactBadge ? 7 : 8;
+  const badgeHeight = compactBadge ? 11 : 12;
+  const badgePadX = compactBadge ? 6 : 8;
 
   const starting = lineup.filter(p => p.start_reason === 'Starting XI');
 
@@ -187,6 +193,45 @@ function drawFormation(canvasEl, lineup, formation, teamColor, gkColor) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(player.jersey_number, cx, cy);
+
+    // Match rating badge: outfield above node, goalkeeper at right side
+    const ratingValue = playerRatings
+      ? (playerRatings[player.real_name] ?? playerRatings[player.player_name])
+      : null;
+    if (Number.isFinite(ratingValue)) {
+      const ratingText = ratingValue.toFixed(2);
+      const ratingColor = playerRatingColors
+        ? (playerRatingColors[player.real_name] ?? playerRatingColors[player.player_name] ?? '#fde68a')
+        : '#fde68a';
+
+      ctx.font = `bold ${badgeFontPx}px 'Segoe UI', sans-serif`;
+      const boxW = Math.ceil(ctx.measureText(ratingText).width) + badgePadX;
+      const boxH = badgeHeight;
+      let boxX;
+      let boxY;
+      if (isGK) {
+        boxX = cx + r + 6;
+        if (boxX + boxW > lw - 2) boxX = cx - r - 6 - boxW;
+        boxX = Math.max(2, Math.min(boxX, lw - boxW - 2));
+        boxY = cy - boxH / 2;
+        boxY = Math.max(2, Math.min(boxY, lh - boxH - 2));
+      } else {
+        boxX = cx - boxW / 2;
+        boxX = Math.max(2, Math.min(boxX, lw - boxW - 2));
+        boxY = Math.max(2, cy - r - boxH - 4);
+      }
+
+      ctx.fillStyle = 'rgba(15,23,42,0.88)';
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+      ctx.strokeStyle = 'rgba(250,204,21,0.95)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+      ctx.fillStyle = ratingColor;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(ratingText, boxX + boxW / 2, boxY + boxH / 2 + 0.25);
+    }
 
     // Name: first name (small) + last name (bold), each squished to fit
     const nameParts = (player.player_name || '').split(' ');

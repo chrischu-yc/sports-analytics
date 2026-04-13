@@ -520,9 +520,75 @@ function getFormation(teamName) {
 const TEAM_COLORS  = ['#e53e3e', '#60a5fa'];   // home=red, away=bright-blue
 const GK_COLORS    = ['#d97706', '#7c3aed'];   // home=amber, away=purple
 
+function getTeamStarterRatingInfo(teamName) {
+  const lineup = state.lineups[teamName] ?? [];
+  const starters = lineup.filter(p => p.start_reason === 'Starting XI');
+  const ratings = {};
+  const ratingColors = {};
+
+  if (!starters.length) {
+    return { ratings, ratingColors, average: null };
+  }
+
+  const eventsByPlayer = new Map();
+  for (const e of state.events) {
+    if (e.team?.name !== teamName) continue;
+    const playerName = e.player?.name;
+    if (!playerName) continue;
+    if (!eventsByPlayer.has(playerName)) eventsByPlayer.set(playerName, []);
+    eventsByPlayer.get(playerName).push(e);
+  }
+
+  const ratingValues = [];
+  for (const starter of starters) {
+    const playerEvents = eventsByPlayer.get(starter.real_name) ?? [];
+    const rating = perfComputeEventBasedRating(playerEvents, starter.position).eventRating;
+    if (!Number.isFinite(rating)) continue;
+    const gradeColor = inferPlayerCardGrade(rating).color;
+
+    ratings[starter.real_name] = rating;
+    ratings[starter.player_name] = rating;
+    ratingColors[starter.real_name] = gradeColor;
+    ratingColors[starter.player_name] = gradeColor;
+    ratingValues.push(rating);
+  }
+
+  const average = ratingValues.length
+    ? ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length
+    : null;
+
+  return { ratings, ratingColors, average };
+}
+
+function formatRatingDisplay(value) {
+  return Number.isFinite(value) ? value.toFixed(2) : 'N/A';
+}
+
+function renderFormationAverageRatings(homeName, awayName, homeAverage, awayAverage) {
+  const summaryEl = document.getElementById('formation-rating-summary');
+  if (!summaryEl) return;
+  const homeAvgColor = Number.isFinite(homeAverage) ? inferPlayerCardGrade(homeAverage).color : 'var(--muted)';
+  const awayAvgColor = Number.isFinite(awayAverage) ? inferPlayerCardGrade(awayAverage).color : 'var(--muted)';
+
+  summaryEl.innerHTML = `
+    <div class="formation-rating-chip">
+      <span class="formation-rating-team"><span class="formation-rating-dot" style="background:${TEAM_COLORS[0]}"></span>${homeName}</span>
+      <span class="formation-rating-value">Starting XI Avg:
+        <strong style="color:${homeAvgColor};font-weight:800">${formatRatingDisplay(homeAverage)}</strong>
+      </span>
+    </div>
+    <div class="formation-rating-chip">
+      <span class="formation-rating-team"><span class="formation-rating-dot" style="background:${TEAM_COLORS[1]}"></span>${awayName}</span>
+      <span class="formation-rating-value">Starting XI Avg:
+        <strong style="color:${awayAvgColor};font-weight:800">${formatRatingDisplay(awayAverage)}</strong>
+      </span>
+    </div>`;
+}
+
 function renderFormations(homeName, awayName) {
   const teams = [homeName, awayName];
   const canvases = ['canvas-home', 'canvas-away'];
+  const teamRatingInfos = teams.map(team => getTeamStarterRatingInfo(team));
 
   teams.forEach((team, i) => {
     const lineup   = state.lineups[team] ?? [];
@@ -532,9 +598,18 @@ function renderFormations(homeName, awayName) {
       lineup,
       formation,
       TEAM_COLORS[i],
-      GK_COLORS[i]
+      GK_COLORS[i],
+      teamRatingInfos[i].ratings,
+      teamRatingInfos[i].ratingColors
     );
   });
+
+  renderFormationAverageRatings(
+    homeName,
+    awayName,
+    teamRatingInfos[0]?.average ?? null,
+    teamRatingInfos[1]?.average ?? null
+  );
 }
 
 // ── Bench ────────────────────────────────────────────────────────────
