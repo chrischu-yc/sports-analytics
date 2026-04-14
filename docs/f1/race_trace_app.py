@@ -56,7 +56,7 @@ def compute_race_data(session):
     ].copy()
     valid_laps["LapSeconds"] = valid_laps["Time"].dt.total_seconds()
 
-    lap_pace = valid_laps.groupby("LapNumber")["LapSeconds"].mean().to_dict()
+    lap_pace = valid_laps.groupby("LapNumber")["LapSeconds"].median().to_dict()
 
     driver_offsets = {d: [] for d in driver_numbers}
     for d in driver_numbers:
@@ -73,7 +73,7 @@ def compute_race_data(session):
             if pace is None or driver_time is None:
                 driver_offsets[d].append(np.nan)
             else:
-                # Positive values mean faster than average pace.
+                # Positive values mean faster than median lap pace.
                 driver_offsets[d].append(pace - driver_time)
 
     pit_laps = {d: [] for d in driver_numbers}
@@ -233,7 +233,7 @@ def build_plot(data, title, selected_abbs=None, lap_range=None):
     tick_step = 1 if (lap_end - lap_start) <= 30 else 2
     ax.set_xticks(np.arange(lap_start, lap_end + 1, tick_step))
     ax.set_xlabel("Lap Number")
-    ax.set_ylabel("Time Offset from Average Pace (seconds)")
+    ax.set_ylabel("Time Offset from Median Pace (seconds)")
     ax.set_title(title)
 
     handles, labels = ax.get_legend_handles_labels()

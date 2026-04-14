@@ -21,16 +21,18 @@ driver_numbers = race.laps['DriverNumber'].unique()
 # Get the average pace for each lap, don't count laps without LapTime
 lap_pace = []
 for n in lap_numbers:
-    avg_time = 0.0
+    #avg_time = 0.0
+    paces = []
     count = 0
     for d in driver_numbers:
         lap_data = race.laps[(race.laps['LapNumber'] == n) & (race.laps['DriverNumber'] == d)]
         if not lap_data.empty and lap_data['LapStartTime'].iloc[0] is not pd.NaT:
-            avg_time += lap_data['Time'].iloc[0].total_seconds()
+            #avg_time += lap_data['Time'].iloc[0].total_seconds()
+            paces.append(lap_data['Time'].iloc[0].total_seconds())
             count += 1
     if count > 0:
-        lap_pace.append(avg_time / count)
-        #lap_pace.append(np.median(avg_time))
+        #lap_pace.append(avg_time / count)
+        lap_pace.append(np.median(paces))
 
 # A list of each driver's time offset from the average pace for each lap
 driver_offsets = {d: [] for d in driver_numbers}
