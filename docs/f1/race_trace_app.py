@@ -7,11 +7,11 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-CACHE_DIR = os.path.join(os.path.dirname(__file__), ".fastf1-cache")
+#CACHE_DIR = os.path.join(os.path.dirname(__file__), ".fastf1-cache")
 # Use /tmp so the app works in ephemeral cloud environments like Streamlit Community Cloud.
 #CACHE_DIR = os.path.join(tempfile.gettempdir(), "fastf1-cache")
-os.makedirs(CACHE_DIR, exist_ok=True)
-fastf1.Cache.enable_cache(CACHE_DIR)
+#os.makedirs(CACHE_DIR, exist_ok=True)
+#fastf1.Cache.enable_cache(CACHE_DIR)
 
 
 @st.cache_resource(show_spinner=False)
