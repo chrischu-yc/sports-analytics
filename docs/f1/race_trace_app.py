@@ -376,6 +376,15 @@ def main():
     )
     st.pyplot(filtered_fig)
 
+    st.divider()
+    st.subheader("Acknowledgement")
+    st.caption(
+        "Data provided via FastF1 python package. "
+        "Thanks to the FastF1 project and contributors for making motorsport analytics more accessible. "
+        "This app is for educational and entertainment purposes only. It's unofficial and not associated in any way with the Formula 1 companies."
+        "F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V."
+    )
+
 
 if __name__ == "__main__":
     main()
