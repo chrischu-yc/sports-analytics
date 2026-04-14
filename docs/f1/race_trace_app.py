@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import datetime
 import fastf1
 import matplotlib.pyplot as plt
@@ -7,6 +8,8 @@ import pandas as pd
 import streamlit as st
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), ".fastf1-cache")
+# Use /tmp so the app works in ephemeral cloud environments like Streamlit Community Cloud.
+#CACHE_DIR = os.path.join(tempfile.gettempdir(), "fastf1-cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 fastf1.Cache.enable_cache(CACHE_DIR)
 
@@ -121,6 +124,44 @@ def compute_race_data(session):
         "safety_car_laps": safety_car_laps,
         "driver_info": driver_info,
     }
+
+
+def build_race_title(session, selected_year: int, selected_race_name: str):
+    race_info = session.session_info
+    meeting = race_info.get("Meeting", {}) if hasattr(race_info, "get") else {}
+
+    meeting_name = (
+        meeting.get("Name")
+        or meeting.get("OfficialName")
+        or meeting.get("Location")
+        or selected_race_name
+    )
+
+    race_year = selected_year
+    start_date = race_info.get("StartDate") if hasattr(race_info, "get") else None
+    if hasattr(start_date, "year"):
+        race_year = start_date.year
+    elif isinstance(start_date, str) and len(start_date) >= 4 and start_date[:4].isdigit():
+        race_year = int(start_date[:4])
+
+    round_number = None
+    if hasattr(meeting, "get"):
+        round_number = meeting.get("Number")
+
+    if round_number in (None, ""):
+        try:
+            round_number = session.event.get("RoundNumber")
+        except Exception:
+            round_number = None
+
+    round_text = ""
+    if round_number not in (None, ""):
+        try:
+            round_text = f" - Round {int(round_number)}"
+        except (TypeError, ValueError):
+            round_text = f" - Round {round_number}"
+
+    return f"{meeting_name} {race_year}{round_text}"
 
 
 def build_plot(data, title, selected_abbs=None, lap_range=None):
@@ -276,9 +317,7 @@ def main():
             st.error(f"Could not load race data: {exc}")
             return
 
-        race_info = session.session_info
-        meeting = race_info["Meeting"]
-        race_title = f"{meeting['Name']} {race_info['StartDate'].year} - Round {meeting['Number']}"
+        race_title = build_race_title(session, int(year), race_name.strip())
 
         st.session_state["race_key"] = race_key
         st.session_state["race_data"] = data
