@@ -1,8 +1,9 @@
-import os
-import tempfile
 from datetime import datetime
 import fastf1
+import fastf1.plotting
+import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -165,6 +166,8 @@ def build_race_title(session, selected_year: int, selected_race_name: str):
 
 
 def build_plot(data, title, selected_abbs=None, lap_range=None):
+    plt.rcdefaults()
+
     lap_numbers = data["lap_numbers"]
     driver_numbers = data["driver_numbers"]
     driver_offsets = data["driver_offsets"]
@@ -256,7 +259,79 @@ def build_plot(data, title, selected_abbs=None, lap_range=None):
         color="gray",
     )
     plt.tight_layout(rect=(0, 0.04, 1, 1))
+    plt.rcdefaults()
     return fig
+
+
+def build_team_pace_comparison_plot(session, race_title):
+    plt.rcdefaults()
+    fastf1.plotting.setup_mpl(mpl_timedelta_support=False, color_scheme="fastf1")
+    try:
+        race_laps = session.laps.pick_quicklaps().copy()
+
+        transformed_laps = race_laps.copy()
+        transformed_laps.loc[:, "LapTime (s)"] = transformed_laps["LapTime"].dt.total_seconds()
+        transformed_laps = transformed_laps[
+            transformed_laps["LapTime (s)"].notna() & transformed_laps["Team"].notna()
+        ]
+
+        if transformed_laps.empty:
+            raise ValueError("No quick lap data available for team pace comparison.")
+
+        team_order = (
+            transformed_laps[["Team", "LapTime (s)"]]
+            .groupby("Team")
+            .median()["LapTime (s)"]
+            .sort_values()
+            .index
+        )
+
+        team_palette = {}
+        results_team_palette = {}
+        if {"TeamName", "TeamColor"}.issubset(session.results.columns):
+            valid_rows = session.results[["TeamName", "TeamColor"]].dropna()
+            for _, row in valid_rows.iterrows():
+                team_name = str(row["TeamName"])
+                team_color = str(row["TeamColor"]).lstrip("#")
+                results_team_palette[team_name] = f"#{team_color}"
+
+        for team in team_order:
+            if team in results_team_palette:
+                team_palette[team] = results_team_palette[team]
+            else:
+                try:
+                    team_palette[team] = fastf1.plotting.get_team_color(team, session=session)
+                except Exception:
+                    team_palette[team] = "#777777"
+
+        fig, ax = plt.subplots(figsize=(15, 8))
+        sns.boxplot(
+            data=transformed_laps,
+            x="Team",
+            y="LapTime (s)",
+            hue="Team",
+            order=team_order,
+            palette=team_palette,
+            whiskerprops={"color": "white"},
+            boxprops={"edgecolor": "white"},
+            medianprops={"color": "grey"},
+            capprops={"color": "white"},
+            ax=ax,
+        )
+
+        legend = ax.get_legend()
+        if legend is not None:
+            legend.remove()
+
+        ax.set_title(f"{race_title} - Team Pace Comparison", fontsize=14)
+        ax.set_xlabel("")
+        ax.set_ylabel("Lap Time (s)")
+        ax.tick_params(axis="x", rotation=25)
+        ax.grid(axis="y", alpha=0.2)
+        fig.tight_layout()
+        return fig
+    finally:
+        plt.rcdefaults()
 
 
 def main():
@@ -287,11 +362,11 @@ def main():
             race_options = []
 
         if race_options:
-            preferred_race = st.session_state.get("race_name_choice", "")
+            # Keep race selection state scoped to each year to avoid stale behavior.
+            per_year_race_key = f"race_name_choice_{int(year)}"
+            preferred_race = st.session_state.get(per_year_race_key, "")
             if preferred_race in race_options:
                 race_index = race_options.index(preferred_race)
-            elif "Japanese Grand Prix" in race_options:
-                race_index = race_options.index("Japanese Grand Prix")
             else:
                 race_index = 0
 
@@ -299,7 +374,9 @@ def main():
                 "Race Name",
                 options=race_options,
                 index=race_index,
+                key=f"race_name_select_{int(year)}",
             )
+            st.session_state[per_year_race_key] = race_name
             st.session_state["race_name_choice"] = race_name
         else:
             race_name = ""
@@ -309,17 +386,29 @@ def main():
 
     race_key = (int(year), race_name.strip().lower())
     if load_clicked:
+        progress_bar = st.progress(0)
+        progress_note = st.empty()
         try:
-            with st.spinner("Loading session data from FastF1..."):
-                session = load_race_session(int(year), race_name.strip())
-                data = compute_race_data(session)
+            progress_note.caption("Requesting race session from FastF1...")
+            progress_bar.progress(15)
+            session = load_race_session(int(year), race_name.strip())
+
+            progress_note.caption("Computing race trace metrics...")
+            progress_bar.progress(70)
+            data = compute_race_data(session)
+
+            progress_note.caption("Finalizing loaded data...")
+            progress_bar.progress(90)
         except Exception as exc:
+            progress_bar.empty()
+            progress_note.empty()
             st.error(f"Could not load race data: {exc}")
             return
 
         race_title = build_race_title(session, int(year), race_name.strip())
 
         st.session_state["race_key"] = race_key
+        st.session_state["race_session"] = session
         st.session_state["race_data"] = data
         st.session_state["race_title"] = race_title
 
@@ -329,61 +418,85 @@ def main():
         st.session_state["selected_abbs"] = all_abbs[: min(6, len(all_abbs))]
         st.session_state["selected_laps"] = (min_lap, max_lap)
 
+        progress_bar.progress(100)
+        progress_note.caption("Race data loaded.")
+        progress_bar.empty()
+        progress_note.empty()
+
     if "race_data" not in st.session_state:
         st.info("Choose a year and race name, then click Load Race.")
         return
 
     data = st.session_state["race_data"]
     race_title = st.session_state["race_title"]
-    st.success(race_title)
+    race_overview_tab, team_specific_tab = st.tabs(["Race Overview", "Team Specific"])
 
-    full_fig = build_plot(data, f"Race Trace - {race_title}")
-    st.pyplot(full_fig)
+    with race_overview_tab:
+        st.success(race_title)
+        st.subheader("Race Trace")
+        full_fig = build_plot(data, f"Race Trace - {race_title}")
+        st.pyplot(full_fig)
 
-    st.subheader("Filtered View")
-    all_abbs = sorted([info["abbreviation"] for info in data["driver_info"].values()])
-    min_lap = min(data["lap_numbers"])
-    max_lap = max(data["lap_numbers"])
-    with st.form("filter_form"):
-        selected_abbs = st.multiselect(
-            "Drivers",
-            options=all_abbs,
-            default=st.session_state.get("selected_abbs", all_abbs[: min(6, len(all_abbs))]),
-            help="Leave empty to show all drivers.",
+        if "race_session" in st.session_state:
+            st.subheader("Team Pace Comparison")
+            try:
+                team_pace_fig = build_team_pace_comparison_plot(
+                    st.session_state["race_session"], race_title
+                )
+                st.pyplot(team_pace_fig)
+            except Exception as exc:
+                st.warning(f"Could not generate team pace comparison: {exc}")
+        else:
+            st.info("Click Load Race to enable Team Pace Comparison chart.")
+
+        st.subheader("Filtered Race Trace View")
+        all_abbs = sorted([info["abbreviation"] for info in data["driver_info"].values()])
+        min_lap = min(data["lap_numbers"])
+        max_lap = max(data["lap_numbers"])
+        with st.form("filter_form"):
+            selected_abbs = st.multiselect(
+                "Drivers",
+                options=all_abbs,
+                default=st.session_state.get("selected_abbs", all_abbs[: min(6, len(all_abbs))]),
+                help="Leave empty to show all drivers.",
+            )
+            selected_laps = st.slider(
+                "Lap Range",
+                min_value=min_lap,
+                max_value=max_lap,
+                value=st.session_state.get("selected_laps", (min_lap, max_lap)),
+                step=1,
+            )
+            plot_clicked = st.form_submit_button("Plot")
+
+        if plot_clicked:
+            st.session_state["selected_abbs"] = selected_abbs
+            st.session_state["selected_laps"] = selected_laps
+
+        chosen_abbs = st.session_state.get("selected_abbs", [])
+        chosen_abbs = chosen_abbs if chosen_abbs else None
+        chosen_laps = st.session_state.get("selected_laps", (min_lap, max_lap))
+
+        filtered_fig = build_plot(
+            data,
+            f"Filtered Race Trace - {race_title}",
+            selected_abbs=chosen_abbs,
+            lap_range=chosen_laps,
         )
-        selected_laps = st.slider(
-            "Lap Range",
-            min_value=min_lap,
-            max_value=max_lap,
-            value=st.session_state.get("selected_laps", (min_lap, max_lap)),
-            step=1,
+        st.pyplot(filtered_fig)
+
+        st.divider()
+        st.subheader("Acknowledgement")
+        st.caption(
+            "Data provided via FastF1 python package. "
+            "Thanks to the FastF1 project and contributors for making motorsport analytics more accessible. "
+            "This app is for educational and entertainment purposes only. It's unofficial and not associated in any way with the Formula 1 companies."
+            "F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V."
         )
-        plot_clicked = st.form_submit_button("Plot")
 
-    if plot_clicked:
-        st.session_state["selected_abbs"] = selected_abbs
-        st.session_state["selected_laps"] = selected_laps
-
-    chosen_abbs = st.session_state.get("selected_abbs", [])
-    chosen_abbs = chosen_abbs if chosen_abbs else None
-    chosen_laps = st.session_state.get("selected_laps", (min_lap, max_lap))
-
-    filtered_fig = build_plot(
-        data,
-        f"Filtered Race Trace - {race_title}",
-        selected_abbs=chosen_abbs,
-        lap_range=chosen_laps,
-    )
-    st.pyplot(filtered_fig)
-
-    st.divider()
-    st.subheader("Acknowledgement")
-    st.caption(
-        "Data provided via FastF1 python package. "
-        "Thanks to the FastF1 project and contributors for making motorsport analytics more accessible. "
-        "This app is for educational and entertainment purposes only. It's unofficial and not associated in any way with the Formula 1 companies."
-        "F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V."
-    )
+    with team_specific_tab:
+        st.subheader("Team Specific")
+        st.info("Coming soon...")
 
 
 if __name__ == "__main__":
