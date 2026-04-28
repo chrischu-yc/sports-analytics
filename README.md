@@ -14,12 +14,7 @@ The app includes a race trace overview with driver pace offsets, pit stop marker
 - Year and race selection with dependent race options.
 - Load-once race sessions with persistent selections in Streamlit.
 - Race trace overview with filtered driver and lap-range views.
-- Team pace comparison boxplots.
+- Team pace comparison boxplots and tyre strategies comparison.
 - Team-specific telemetry, track map, and lap-time charts.
-
-### Run the app
-```bash
-streamlit run docs/f1/race_trace_app.py
-```
 
 The app is powered by the FastF1 python package and is intended for educational and entertainment use.

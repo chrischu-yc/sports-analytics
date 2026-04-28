@@ -16,6 +16,19 @@ import streamlit as st
 #fastf1.Cache.enable_cache(CACHE_DIR)
 
 
+def add_plot_tag(fig, tag="@chrischu-yc"):
+    fig.text(
+        0.99,
+        0.01,
+        tag,
+        ha="right",
+        va="bottom",
+        fontsize=8,
+        color="gray",
+        alpha=0.8,
+    )
+
+
 @st.cache_resource(show_spinner=False)
 def load_race_session(year: int, race_name: str):
     session = fastf1.get_session(year, race_name, "R")
@@ -261,6 +274,7 @@ def build_plot(data, title, selected_abbs=None, lap_range=None):
         fontsize=10,
         color="gray",
     )
+    add_plot_tag(fig)
     plt.tight_layout(rect=(0, 0.04, 1, 1))
     plt.rcdefaults()
     return fig
@@ -342,6 +356,118 @@ def build_team_pace_comparison_plot(session, race_title):
         ax.set_ylabel("Lap Time (s)")
         ax.tick_params(axis="x", rotation=25)
         ax.grid(axis="y", alpha=0.2)
+        add_plot_tag(fig)
+        fig.tight_layout()
+        return fig
+    finally:
+        plt.rcdefaults()
+
+
+def build_tyre_strategy_comparison_plot(session, race_title):
+    plt.rcdefaults()
+    try:
+        laps = session.laps[["Driver", "Stint", "Compound", "LapNumber"]].dropna(
+            subset=["Driver", "Stint", "Compound", "LapNumber"]
+        ).copy()
+
+        if laps.empty:
+            raise ValueError("No stint data available for tyre strategy comparison.")
+
+        stints = (
+            laps.groupby(["Driver", "Stint", "Compound"], sort=True)["LapNumber"]
+            .count()
+            .reset_index()
+            .rename(columns={"LapNumber": "StintLength"})
+        )
+
+        stints["Driver"] = stints["Driver"].astype(str)
+        stints["Compound"] = stints["Compound"].astype(str)
+
+        driver_order = []
+        if "Abbreviation" in session.results.columns:
+            driver_order = [
+                abb
+                for abb in session.results["Abbreviation"].dropna().astype(str).tolist()
+                if abb in stints["Driver"].unique().tolist()
+            ]
+
+        if not driver_order:
+            driver_order = sorted(stints["Driver"].unique().tolist())
+
+        manual_compound_colors = {
+            "SOFT": "red",
+            "MEDIUM": "yellow",
+            "HARD": "white",
+            "INTERMEDIATE": "green",
+            "WET": "blue",
+        }
+
+        def _manual_compound_color(compound_value):
+            return manual_compound_colors.get(str(compound_value).strip().upper(), "gray")
+
+        def _normalize_compound_color(color_value, compound_value):
+            color_text = str(color_value).strip()
+            if not color_text or color_text.lower() in {"nan", "none", "null"}:
+                return _manual_compound_color(compound_value)
+            if not color_text.startswith("#"):
+                color_text = f"#{color_text}"
+            return color_text if mpl.colors.is_color_like(color_text) else _manual_compound_color(compound_value)
+
+        compound_order = []
+        seen_compounds = set()
+        for compound in stints["Compound"].tolist():
+            if compound not in seen_compounds:
+                seen_compounds.add(compound)
+                compound_order.append(compound)
+
+        compound_palette = {}
+        for compound in compound_order:
+            try:
+                compound_palette[compound] = _normalize_compound_color(
+                    fastf1.plotting.get_compound_color(compound, session=session),
+                    compound,
+                )
+            except Exception:
+                compound_palette[compound] = _manual_compound_color(compound)
+
+        fig, ax = plt.subplots(figsize=(15, 8))
+        #ax.set_facecolor("oldlace")
+        x_positions = np.arange(len(driver_order))
+
+        for idx, driver in enumerate(driver_order):
+            driver_stints = stints[stints["Driver"] == driver].sort_values("Stint")
+            previous_stint_end = 0
+
+            for _, row in driver_stints.iterrows():
+                compound_color = compound_palette.get(row["Compound"], "gray")
+                ax.bar(
+                    idx,
+                    row["StintLength"],
+                    bottom=previous_stint_end,
+                    color=compound_color,
+                    edgecolor="black",
+                    linewidth=0.6,
+                    width=0.75,
+                )
+                previous_stint_end += row["StintLength"]
+
+        legend_handles = [
+            mpl.patches.Patch(facecolor=compound_palette[compound], label=compound)
+            for compound in compound_order
+        ]
+        if legend_handles:
+            ax.legend(handles=legend_handles, title="Compound", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(driver_order)
+        ax.set_ylabel("Lap Number")
+        ax.set_title(f"{race_title} - Tyre Strategy Overview", fontsize=16)
+        ax.grid(axis="y", alpha=0.3)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+        #ax.spines["left"].set_color("gray")
+        add_plot_tag(fig)
         fig.tight_layout()
         return fig
     finally:
@@ -420,6 +546,7 @@ def build_team_fastest_lap_comparison_plot(session, team_name, race_title):
         ax.set_title(f"{race_title} - {team_name} - Fastest Lap Comparison")
         ax.legend()
         fig.set_size_inches(12, 6)
+        add_plot_tag(fig)
         fig.tight_layout()
         return fig
     finally:
@@ -504,6 +631,7 @@ def build_team_track_map_plot(session, team_name, race_title):
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_aspect("equal", adjustable="box")
+        add_plot_tag(fig)
 
         return fig
     finally:
@@ -614,6 +742,7 @@ def build_team_lap_time_plots(session, team_name, race_title):
         ax_lap.invert_yaxis()
         ax_tire.legend(handles=driver_handles, title="Driver (marker)", bbox_to_anchor=(1.02, 1), loc="upper left")
         fig.suptitle(f"{race_title} - {team_name} - Lap Times", size=12)
+        add_plot_tag(fig)
         plt.tight_layout()
         return fig
     finally:
@@ -717,6 +846,15 @@ def main():
                 st.pyplot(team_pace_fig)
             except Exception as exc:
                 st.warning(f"Could not generate team pace comparison: {exc}")
+
+            st.subheader("Tyre Strategies Comparison")
+            try:
+                tyre_strategy_fig = build_tyre_strategy_comparison_plot(
+                    st.session_state["race_session"], race_title
+                )
+                st.pyplot(tyre_strategy_fig)
+            except Exception as exc:
+                st.warning(f"Could not generate tyre strategy comparison: {exc}")
         else:
             st.info("Click Load Race to enable Team Pace Comparison chart.")
 
