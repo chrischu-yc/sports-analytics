@@ -466,7 +466,7 @@ def build_team_track_map_plot(session, team_name, race_title):
         ], axis=1)
 
         fig, ax = plt.subplots(sharex=True, sharey=True, figsize=(12, 6.75))
-        fig.suptitle(f"{race_title} - {faster_driver} - Fastest Lap", size=24, y=0.97)
+        fig.suptitle(f"{race_title} - {faster_driver} - Fastest Lap", size=18, y=0.97)
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.12)
         ax.axis("off")
         ax.plot(
