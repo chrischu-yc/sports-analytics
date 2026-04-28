@@ -1,6 +1,5 @@
 # sports-analytics
-Rookie sports analytics enthusiast. Trying to do something.  
-A passion project of mine. Hopefully one day these will turn out to be something.
+Rookie sports analytics enthusiast. This is a place for me creating some passion projects. Love football, baseball and F1. Hopefully one day these will be discovered by someone big :D
 
 ## Statsbomb Open Data Match Explorer
 A website that showcases all matches in the Statsbomb open data, and contains many useful visuals including passing maps, team passing networks, player performance cards and a lot more.   
