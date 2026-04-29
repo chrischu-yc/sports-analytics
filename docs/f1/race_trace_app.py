@@ -1342,7 +1342,7 @@ def main():
     race_key = (int(year), race_name.strip().lower())
     if load_clicked:
         try:
-            with st.spinner("Loading session data from FastF1..."):
+            with st.spinner("Loading session data from FastF1... This could take a moment..."):
                 session = load_race_session(int(year), race_name.strip())
                 data = compute_race_data(session)
         except Exception as exc:
