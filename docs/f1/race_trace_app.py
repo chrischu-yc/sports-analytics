@@ -29,7 +29,6 @@ def add_plot_tag(fig, tag="@chrischu-yc"):
     )
 
 
-@st.cache_resource(show_spinner=False)
 def load_race_session(year: int, race_name: str):
     session = fastf1.get_session(year, race_name, "R")
     session.load()
