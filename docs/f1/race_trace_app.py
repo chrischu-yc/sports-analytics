@@ -29,7 +29,6 @@ def add_plot_tag(fig, tag="@chrischu-yc"):
     )
 
 
-@st.cache_resource(show_spinner=False, max_entries=1, ttl=3600)
 def load_race_session(year: int, race_name: str):
     session = fastf1.get_session(year, race_name, "R")
     session.load()
@@ -1551,7 +1550,6 @@ def main():
         if st.button("Help", use_container_width=True, disabled=not race_options):
             show_app_help_dialog()
         if st.button("Clear Cached Data", use_container_width=True):
-            load_race_session.clear()
             load_race_bundle.clear()
             get_race_options.clear()
             for key in [
