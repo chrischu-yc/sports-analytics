@@ -722,8 +722,8 @@ def build_driver_fastest_lap_comparison_plot(session, driver_a, driver_b, race_t
     try:
         circuit_info = session.get_circuit_info()
         driver_order = build_comparison_driver_order(driver_a, driver_b, driver_c)
-        if len(driver_order) < 2:
-            raise ValueError("Please select at least two different drivers.")
+        if len(driver_order) < 1:
+            raise ValueError("Please select at least one driver.")
 
         fig, ax = plt.subplots(figsize=(12, 6))
         last_car_data = None
@@ -799,8 +799,8 @@ def build_driver_fastest_lap_metric_plot(
         circuit_info = session.get_circuit_info()
         fig, ax = plt.subplots(figsize=(14, 6))
         driver_order = build_comparison_driver_order(driver_a, driver_b, driver_c)
-        if len(driver_order) < 2:
-            raise ValueError("Please select at least two different drivers.")
+        if len(driver_order) < 1:
+            raise ValueError("Please select at least one driver.")
 
         comparison_label = build_driver_comparison_label(session, driver_order)
         line_styles = ["-", "-.", "--", ":"]
@@ -858,14 +858,132 @@ def build_driver_fastest_lap_metric_plot(
         plt.rcdefaults()
 
 
+def build_driver_telemetry_overview_plot(session, driver_a, driver_b, race_title, driver_c=None):
+    plt.rcdefaults()
+    fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme="fastf1")
+    try:
+        circuit_info = session.get_circuit_info()
+        driver_order = build_comparison_driver_order(driver_a, driver_b, driver_c)
+        if len(driver_order) < 1:
+            raise ValueError("Please select at least one driver.")
+
+        comparison_label = build_driver_comparison_label(session, driver_order)
+        line_styles = ["-", "-.", "--", ":"]
+        metric_specs = [
+            ("Speed", "Speed [km/h]", 10, 20, 0),
+            ("RPM", "RPM", 300, 100, -100),
+            ("nGear", "Gear Number", 1, 1, -0.5),
+            ("Throttle", "Throttle [%]", 5, 5, -8),
+            ("Brake", "Brake [%]", 5, 5, -8),
+        ]
+
+        fig, axes = plt.subplots(len(metric_specs), 1, figsize=(21, 16), sharex=True)
+        axes = np.atleast_1d(axes)
+        fig.suptitle(f"{race_title} - {comparison_label} - Telemetry Overview", size=18, y=0.995)
+        plt.subplots_adjust(left=0.07, right=0.94, top=0.95, bottom=0.1, hspace=0.16)
+
+        metric_values_by_axis = [[] for _ in metric_specs]
+        corner_positions = circuit_info.corners["Distance"]
+
+        for idx, driver_abbreviation in enumerate(driver_order):
+            fastest_lap = session.laps.pick_drivers(driver_abbreviation).pick_fastest()
+            if fastest_lap is None or pd.isna(fastest_lap["LapTime"]):
+                continue
+
+            car_data = fastest_lap.get_car_data().add_distance()
+            color = get_driver_team_color(session, driver_abbreviation)
+            style = line_styles[idx % len(line_styles)]
+            label = f"{get_driver_display_name(session, driver_abbreviation)}"
+
+            for axis_index, (metric_column, y_label, low_padding, high_padding, corner_label_offset) in enumerate(metric_specs):
+                axis = axes[axis_index]
+                metric_series = car_data[metric_column]
+                if metric_column in {"Throttle", "Brake"}:
+                    metric_series = metric_series * 100.0
+
+                metric_values = metric_series.dropna()
+                if metric_values.empty:
+                    continue
+
+                metric_values_by_axis[axis_index].append(metric_values)
+                axis.plot(car_data["Distance"], metric_series, color=color, linestyle=style, label=label)
+
+        for axis_index, (metric_column, y_label, low_padding, high_padding, corner_label_offset) in enumerate(metric_specs):
+            axis = axes[axis_index]
+            axis.set_ylabel(y_label)
+            axis.grid(alpha=0.2)
+
+            if metric_values_by_axis[axis_index]:
+                combined_values = pd.concat(metric_values_by_axis[axis_index])
+                v_min = combined_values.min()
+                v_max = combined_values.max()
+
+                axis.vlines(
+                    x=corner_positions,
+                    ymin=v_min - low_padding,
+                    ymax=v_max + high_padding,
+                    linestyles="dotted",
+                    colors="grey",
+                )
+
+                axis.set_ylim([v_min - low_padding, v_max + high_padding])
+
+            if axis_index < len(metric_specs) - 1:
+                axis.tick_params(labelbottom=False)
+
+            axis.legend(loc="upper right")
+
+        axes[-1].set_xlabel("Distance in m")
+        fig.canvas.draw()
+
+        top_y = axes[0].get_position().y1
+        bottom_y = axes[-1].get_position().y0
+        bottom_axis = axes[-1]
+        corner_label_y = -0.02
+
+        for _, corner in circuit_info.corners.iterrows():
+            corner_x_display = bottom_axis.transData.transform((corner["Distance"], 0))[0]
+            corner_x_fig = fig.transFigure.inverted().transform((corner_x_display, 0))[0]
+
+            fig.add_artist(
+                mpl.lines.Line2D(
+                    [corner_x_fig, corner_x_fig],
+                    [bottom_y, top_y],
+                    transform=fig.transFigure,
+                    linestyle="dotted",
+                    color="grey",
+                    linewidth=0.9,
+                    alpha=0.85,
+                    zorder=1,
+                )
+            )
+
+            bottom_axis.text(
+                corner["Distance"],
+                corner_label_y,
+                f"{corner['Number']}{corner['Letter']}",
+                transform=bottom_axis.get_xaxis_transform(),
+                va="bottom",
+                ha="center",
+                size="small",
+                clip_on=False,
+            )
+
+        add_plot_tag(fig)
+        fig.tight_layout(rect=[0, 0, 1, 0.97])
+        return fig
+    finally:
+        plt.rcdefaults()
+
+
 def build_driver_lap_time_plot(session, driver_a, driver_b, race_title, driver_c=None):
     plt.rcdefaults()
     fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme="fastf1")
     try:
         fig, ax = plt.subplots(figsize=(12, 6))
         driver_order = build_comparison_driver_order(driver_a, driver_b, driver_c)
-        if len(driver_order) < 2:
-            raise ValueError("Please select at least two different drivers.")
+        if len(driver_order) < 1:
+            raise ValueError("Please select at least one driver.")
 
         marker_cycle = ["o", "D", "^", "s", "P"]
         driver_markers = {driver: marker_cycle[idx % len(marker_cycle)] for idx, driver in enumerate(driver_order)}
@@ -1110,8 +1228,8 @@ def build_driver_gear_shift_comparison_plot(session, driver_a, driver_b, race_ti
     try:
         circuit_info = session.get_circuit_info()
         driver_order = build_comparison_driver_order(driver_a, driver_b, driver_c)
-        if len(driver_order) < 2:
-            raise ValueError("Please select at least two different drivers.")
+        if len(driver_order) < 1:
+            raise ValueError("Please select at least one driver.")
 
         driver_data = {}
         gear_values = []
@@ -1540,26 +1658,23 @@ def main():
 
     with driver_comparison_tab:
         st.subheader("Driver Comparison")
-        st.caption("Choose two or three drivers and submit to generate the comparison plots for their telemetry, race performance, and lap data.")
+        st.caption("Choose one, two, or three drivers and submit to generate the comparison plots for their telemetry, race performance, and lap data.")
 
         driver_options = get_driver_options(st.session_state["race_session"])
-        if len(driver_options) < 2:
+        if len(driver_options) < 1:
             st.info("Not enough driver data available for comparison.")
         else:
             driver_compare_state_key = f"driver_compare_selection_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}"
             default_driver_a = st.session_state.get(f"driver_compare_driver_a_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", driver_options[0])
-            default_driver_b = st.session_state.get(
-                f"driver_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
-                driver_options[1] if len(driver_options) > 1 else driver_options[0],
-            )
+            default_driver_b = st.session_state.get(f"driver_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", "")
             default_driver_c = st.session_state.get(
                 f"driver_compare_driver_c_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
                 "",
             )
             if default_driver_a not in driver_options:
                 default_driver_a = driver_options[0]
-            if default_driver_b not in driver_options:
-                default_driver_b = driver_options[1] if len(driver_options) > 1 else driver_options[0]
+            if default_driver_b not in ("", *driver_options):
+                default_driver_b = ""
             if default_driver_c not in driver_options:
                 default_driver_c = ""
 
@@ -1575,9 +1690,9 @@ def main():
                 )
                 driver_b = st.selectbox(
                     "Driver B",
-                    options=driver_options,
-                    index=driver_options.index(default_driver_b),
-                    format_func=driver_label,
+                    options=[""] + driver_options,
+                    index=([""] + driver_options).index(default_driver_b),
+                    format_func=lambda abb: "None" if abb == "" else driver_label(abb),
                     key=f"driver_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
                 )
                 driver_c = st.selectbox(
@@ -1590,160 +1705,172 @@ def main():
                 compare_clicked = st.form_submit_button("Compare Drivers")
 
             if compare_clicked:
-                st.session_state[driver_compare_state_key] = (driver_a, driver_b, driver_c or None)
+                raw_selected_drivers = [driver for driver in [driver_a, driver_b, driver_c] if driver]
+                comparison_drivers = build_comparison_driver_order(*raw_selected_drivers)
+
+                if len(comparison_drivers) != len(raw_selected_drivers):
+                    st.warning("Please choose different drivers for each slot.")
+                    st.session_state[driver_compare_state_key] = ()
+                else:
+                    st.session_state[driver_compare_state_key] = tuple(comparison_drivers)
 
             selected_drivers = st.session_state.get(driver_compare_state_key)
             if selected_drivers:
-                if len(selected_drivers) == 2:
-                    driver_a, driver_b = selected_drivers
-                    driver_c = None
-                else:
-                    driver_a, driver_b, driver_c = selected_drivers[:3]
+                comparison_drivers = list(selected_drivers)
+                comparison_names = [
+                    f"{get_driver_display_name(st.session_state['race_session'], driver)} ({get_driver_finish_position(st.session_state['race_session'], driver)})"
+                    for driver in comparison_drivers
+                ]
+                st.markdown(f"#### {' vs '.join(comparison_names)}")
 
-                raw_selected_drivers = [driver_a, driver_b] + ([driver_c] if driver_c else [])
-                comparison_drivers = build_comparison_driver_order(*raw_selected_drivers)
+                driver_a = comparison_drivers[0]
+                driver_b = comparison_drivers[1] if len(comparison_drivers) > 1 else None
+                driver_c = comparison_drivers[2] if len(comparison_drivers) > 2 else None
 
-                if len(comparison_drivers) < 2:
-                    st.warning("Please select at least two different drivers.")
-                elif len(comparison_drivers) != len(raw_selected_drivers):
-                    st.warning("Please choose different drivers for each slot.")
-                else:
-                    comparison_names = [
-                        f"{get_driver_display_name(st.session_state['race_session'], driver)} ({get_driver_finish_position(st.session_state['race_session'], driver)})"
-                        for driver in comparison_drivers
-                    ]
-                    st.markdown(f"#### {' vs '.join(comparison_names)}")
+                st.markdown("##### Race Trace")
+                race_compare_fig = build_plot(
+                    data,
+                    f"Driver Comparison Race Trace - {race_title}",
+                    selected_abbs=comparison_drivers,
+                )
+                st.pyplot(race_compare_fig)
 
-                    st.markdown("##### Race Trace")
-                    race_compare_fig = build_plot(
-                        data,
-                        f"Driver Comparison Race Trace - {race_title}",
-                        selected_abbs=comparison_drivers,
+                st.markdown("##### Fastest Lap Speed Comparison")
+                try:
+                    fastest_lap_compare_fig = build_driver_fastest_lap_comparison_plot(
+                        st.session_state["race_session"], driver_a, driver_b, race_title, driver_c=driver_c
                     )
-                    st.pyplot(race_compare_fig)
+                    st.pyplot(fastest_lap_compare_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate fastest lap comparison: {exc}")
 
-                    st.markdown("##### Fastest Lap Speed Comparison")
-                    try:
-                        fastest_lap_compare_fig = build_driver_fastest_lap_comparison_plot(
-                            st.session_state["race_session"], driver_a, driver_b, race_title, driver_c=driver_c
-                        )
-                        st.pyplot(fastest_lap_compare_fig)
-                    except Exception as exc:
-                        st.warning(f"Could not generate fastest lap comparison: {exc}")
+                st.markdown("##### Fastest Lap RPM Comparison")
+                try:
+                    rpm_compare_fig = build_driver_fastest_lap_metric_plot(
+                        st.session_state["race_session"],
+                        driver_a,
+                        driver_b,
+                        race_title,
+                        "RPM",
+                        "RPM",
+                        "RPM Comparison",
+                        low_padding=300,
+                        high_padding=100,
+                        corner_label_offset=-100,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(rpm_compare_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate RPM comparison: {exc}")
 
-                    st.markdown("##### Fastest Lap RPM Comparison")
-                    try:
-                        rpm_compare_fig = build_driver_fastest_lap_metric_plot(
-                            st.session_state["race_session"],
-                            driver_a,
-                            driver_b,
-                            race_title,
-                            "RPM",
-                            "RPM",
-                            "RPM Comparison",
-                            low_padding=300,
-                            high_padding=100,
-                            corner_label_offset=-100,
-                            driver_c=driver_c,
-                        )
-                        st.pyplot(rpm_compare_fig)
-                    except Exception as exc:
-                        st.warning(f"Could not generate RPM comparison: {exc}")
+                st.markdown("##### Fastest Lap Throttle Percentage Comparison")
+                try:
+                    throttle_compare_fig = build_driver_fastest_lap_metric_plot(
+                        st.session_state["race_session"],
+                        driver_a,
+                        driver_b,
+                        race_title,
+                        "Throttle",
+                        "Throttle in %",
+                        "Throttle Comparison",
+                        low_padding=15,
+                        high_padding=10,
+                        corner_label_offset=-10,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(throttle_compare_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate throttle comparison: {exc}")
 
-                    st.markdown("##### Fastest Lap Throttle Percentage Comparison")
-                    try:
-                        throttle_compare_fig = build_driver_fastest_lap_metric_plot(
-                            st.session_state["race_session"],
-                            driver_a,
-                            driver_b,
-                            race_title,
-                            "Throttle",
-                            "Throttle in %",
-                            "Throttle Comparison",
-                            low_padding=15,
-                            high_padding=10,
-                            corner_label_offset=-10,
-                            driver_c=driver_c,
-                        )
-                        st.pyplot(throttle_compare_fig)
-                    except Exception as exc:
-                        st.warning(f"Could not generate throttle comparison: {exc}")
+                st.markdown("##### Fastest Lap Brake Usage Comparison")
+                try:
+                    brake_compare_fig = build_driver_fastest_lap_metric_plot(
+                        st.session_state["race_session"],
+                        driver_a,
+                        driver_b,
+                        race_title,
+                        "Brake",
+                        "Brake Pressed (%)",
+                        "Brake Usage Comparison",
+                        low_padding=10,
+                        high_padding=10,
+                        corner_label_offset=-6,
+                        metric_scale=100.0,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(brake_compare_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate brake usage comparison: {exc}")
 
-                    st.markdown("##### Fastest Lap Brake Usage Comparison")
-                    try:
-                        brake_compare_fig = build_driver_fastest_lap_metric_plot(
-                            st.session_state["race_session"],
-                            driver_a,
-                            driver_b,
-                            race_title,
-                            "Brake",
-                            "Brake Pressed (%)",
-                            "Brake Usage Comparison",
-                            low_padding=10,
-                            high_padding=10,
-                            corner_label_offset=-6,
-                            metric_scale=100.0,
-                            driver_c=driver_c,
-                        )
-                        st.pyplot(brake_compare_fig)
-                    except Exception as exc:
-                        st.warning(f"Could not generate brake usage comparison: {exc}")
+                st.markdown("##### Fastest Lap Gear Number Comparison")
+                try:
+                    gear_compare_fig = build_driver_fastest_lap_metric_plot(
+                        st.session_state["race_session"],
+                        driver_a,
+                        driver_b,
+                        race_title,
+                        "nGear",
+                        "Gear number",
+                        "Gear Comparison",
+                        low_padding=2,
+                        high_padding=1,
+                        corner_label_offset=-1.5,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(gear_compare_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate gear comparison: {exc}")
 
-                    st.markdown("##### Fastest Lap Gear Number Comparison")
-                    try:
-                        gear_compare_fig = build_driver_fastest_lap_metric_plot(
-                            st.session_state["race_session"],
-                            driver_a,
-                            driver_b,
-                            race_title,
-                            "nGear",
-                            "Gear number",
-                            "Gear Comparison",
-                            low_padding=2,
-                            high_padding=1,
-                            corner_label_offset=-1.5,
-                            driver_c=driver_c,
-                        )
-                        st.pyplot(gear_compare_fig)
-                    except Exception as exc:
-                        st.warning(f"Could not generate gear comparison: {exc}")
+                st.markdown("##### Gear Shifts on Track")
+                st.caption("Each driver's fastest lap track map colored by gear number.")
+                try:
+                    gear_track_map_fig = build_driver_gear_shift_comparison_plot(
+                        st.session_state["race_session"],
+                        driver_a,
+                        driver_b,
+                        race_title,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(gear_track_map_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate gear shift comparison: {exc}")
 
-                    st.markdown("##### Gear Shifts on Track")
-                    st.caption("Each driver's fastest lap track map colored by gear number.")
-                    try:
-                        gear_track_map_fig = build_driver_gear_shift_comparison_plot(
-                            st.session_state["race_session"],
-                            driver_a,
-                            driver_b,
-                            race_title,
-                            driver_c=driver_c,
-                        )
-                        st.pyplot(gear_track_map_fig)
-                    except Exception as exc:
-                        st.warning(f"Could not generate gear shift comparison: {exc}")
+                st.markdown("##### Lap Time vs Lap Number")
+                try:
+                    lap_time_compare_fig = build_driver_lap_time_plot(
+                        st.session_state["race_session"], driver_a, driver_b, race_title, driver_c=driver_c
+                    )
+                    st.pyplot(lap_time_compare_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate lap time comparison: {exc}")
 
-                    st.markdown("##### Lap Time vs Lap Number")
-                    try:
-                        lap_time_compare_fig = build_driver_lap_time_plot(
-                            st.session_state["race_session"], driver_a, driver_b, race_title, driver_c=driver_c
-                        )
-                        st.pyplot(lap_time_compare_fig)
-                    except Exception as exc:
-                        st.warning(f"Could not generate lap time comparison: {exc}")
+                st.markdown("##### Tyre Strategy Comparison")
+                try:
+                    tyre_strategy_compare_fig = build_tyre_strategy_comparison_plot(
+                        st.session_state["race_session"],
+                        race_title,
+                        selected_drivers=comparison_drivers,
+                        plot_title=f"{race_title} - {' vs '.join([get_driver_display_name(st.session_state['race_session'], driver) for driver in comparison_drivers])} - Tyre Strategy Comparison",
+                    )
+                    st.pyplot(tyre_strategy_compare_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate tyre strategy comparison: {exc}")
 
-                    st.markdown("##### Tyre Strategy Comparison")
-                    try:
-                        tyre_strategy_compare_fig = build_tyre_strategy_comparison_plot(
-                            st.session_state["race_session"],
-                            race_title,
-                            selected_drivers=comparison_drivers,
-                            plot_title=f"{race_title} - {' vs '.join([get_driver_display_name(st.session_state['race_session'], driver) for driver in comparison_drivers])} - Tyre Strategy Comparison",
-                        )
-                        st.pyplot(tyre_strategy_compare_fig)
-                    except Exception as exc:
-                        st.warning(f"Could not generate tyre strategy comparison: {exc}")
+                st.markdown("##### Telemetry Overview")
+                st.caption("Stacked fastest-lap telemetry overview showing speed, RPM, gear number, throttle usage, and brake usage.")
+                try:
+                    telemetry_overview_fig = build_driver_telemetry_overview_plot(
+                        st.session_state["race_session"],
+                        driver_a,
+                        driver_b,
+                        race_title,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(telemetry_overview_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate telemetry overview: {exc}")
             else:
-                st.info("Choose two or three drivers and submit to generate the comparison plots.")
+                st.info("Choose one, two, or three drivers and submit to generate the comparison plots.")
 
     st.divider()
     st.markdown("##### Acknowledgement")
