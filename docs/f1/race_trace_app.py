@@ -1454,11 +1454,49 @@ def build_team_lap_time_plots(session, team_name, race_title):
         plt.rcdefaults()
 
 
+@st.dialog("App Guide")
+def show_app_help_dialog():
+    st.markdown("## Welcome to the F1 Race Trace App")
+    st.write(
+        "Use the sidebar to pick a season and race, then load the session data to explore the race from several angles."
+    )
+
+    st.markdown("### What's in this app?")
+    st.markdown(
+        """
+        - **Race Overview** shows the overall race trace, team pace, and tyre strategy comparison.
+        - **Team Specific** focuses on one team and its fastest-lap telemetry views.
+        - **Driver Comparison** lets you see one, two, or three drivers using lap, telemetry, and strategy plots.
+        - The **Telemetry Overview** plot combines speed, RPM, gear, throttle, and brake traces in one view.
+        """
+    )
+
+    st.markdown("### Tips")
+    st.markdown(
+        """
+        - Start with **Load Race** after selecting a year and race.
+        - In Driver Comparison, leave Driver B or Driver C blank if you only want to inspect one driver.
+        - Use the filtered race trace to narrow the race view by drivers or lap range.
+        - Enjoy exploring the data and discovering insights about your favorite drivers and teams!
+        """
+    )
+
+    st.markdown("### Feedback and Contributions")
+    st.markdown(
+        """
+        - Feel free to reach out if you find a bug or have a feature request. You can find me on GitHub (chrischu-yc).
+        - This app is made possible by the FastF1 library and the F1 data providers. Consider supporting them if you enjoy this app!
+        """
+    )
+
+    st.info("Close this guide with the button in the top-right corner.")
+
+
 def main():
     st.set_page_config(page_title="F1 Race Trace App", layout="wide")
     st.title("F1 Race Trace App")
-    st.caption("Interactive race pace trace powered by FastF1. Made by Chris Chu. Find out more of my work at https://github.com/chrischu-yc. ")
-    st.caption("Also check out my football analytics website at https://chrischu-yc.github.io/sports-analytics/statsbomb_opendata_visualize/")
+    st.caption("Comprehensive race data powered by FastF1. Your one-stop site for F1 race analysis. See races from new perspectives.")
+    st.caption("Made by Chris Chu. Find out more of my work at https://github.com/chrischu-yc. Also check out my football analytics website at https://chrischu-yc.github.io/sports-analytics/statsbomb_opendata_visualize/")
 
     current_year = datetime.now().year
 
@@ -1504,6 +1542,8 @@ def main():
             st.warning("No races found for this year.")
 
         load_clicked = st.button("Load Race", type="primary", disabled=not race_options)
+        if st.button("Help", use_container_width=True, disabled=not race_options):
+            show_app_help_dialog()
 
     race_key = (int(year), race_name.strip().lower())
     if load_clicked:
