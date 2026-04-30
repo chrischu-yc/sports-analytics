@@ -1,6 +1,6 @@
 streamlit
-fastf1
+fastf1==3.8.1
 matplotlib
 seaborn
 numpy
-pandas
+pandas<3
