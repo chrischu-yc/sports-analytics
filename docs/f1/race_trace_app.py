@@ -1735,6 +1735,20 @@ def main():
                 )
                 st.pyplot(race_compare_fig)
 
+                st.markdown("##### Telemetry Overview")
+                st.caption("Stacked fastest-lap telemetry overview showing speed, RPM, gear number, throttle usage, and brake usage.")
+                try:
+                    telemetry_overview_fig = build_driver_telemetry_overview_plot(
+                        st.session_state["race_session"],
+                        driver_a,
+                        driver_b,
+                        race_title,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(telemetry_overview_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate telemetry overview: {exc}")
+
                 st.markdown("##### Fastest Lap Speed Comparison")
                 try:
                     fastest_lap_compare_fig = build_driver_fastest_lap_comparison_plot(
@@ -1855,20 +1869,6 @@ def main():
                     st.pyplot(tyre_strategy_compare_fig)
                 except Exception as exc:
                     st.warning(f"Could not generate tyre strategy comparison: {exc}")
-
-                st.markdown("##### Telemetry Overview")
-                st.caption("Stacked fastest-lap telemetry overview showing speed, RPM, gear number, throttle usage, and brake usage.")
-                try:
-                    telemetry_overview_fig = build_driver_telemetry_overview_plot(
-                        st.session_state["race_session"],
-                        driver_a,
-                        driver_b,
-                        race_title,
-                        driver_c=driver_c,
-                    )
-                    st.pyplot(telemetry_overview_fig)
-                except Exception as exc:
-                    st.warning(f"Could not generate telemetry overview: {exc}")
             else:
                 st.info("Choose one, two, or three drivers and submit to generate the comparison plots.")
 
