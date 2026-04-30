@@ -363,7 +363,13 @@ def build_team_pace_comparison_plot(session, race_title):
         plt.rcdefaults()
 
 
-def build_tyre_strategy_comparison_plot(session, race_title, selected_drivers=None, plot_title=None):
+def build_tyre_strategy_comparison_plot(
+    session,
+    race_title,
+    selected_drivers=None,
+    plot_title=None,
+    use_full_names=True,
+):
     plt.rcdefaults()
     try:
         laps = session.laps[["Driver", "Stint", "Compound", "LapNumber"]].dropna(
@@ -465,7 +471,9 @@ def build_tyre_strategy_comparison_plot(session, race_title, selected_drivers=No
                 ax.legend(handles=legend_handles, title="Compound", bbox_to_anchor=(1.02, 1), loc="upper left")
 
             ax.set_yticks(y_positions)
-            ax.set_yticklabels([get_driver_display_name(session, driver) for driver in driver_order])
+            ax.set_yticklabels(
+                [get_driver_display_name(session, driver) if use_full_names else driver for driver in driver_order]
+            )
             ax.set_xlabel("Lap Number")
             max_lap = int((stints["StartLap"] + stints["StintLength"] - 1).max())
             tick_step = 1 if max_lap <= 30 else 2 if max_lap <= 60 else 5
@@ -508,7 +516,9 @@ def build_tyre_strategy_comparison_plot(session, race_title, selected_drivers=No
             ax.legend(handles=legend_handles, title="Compound", bbox_to_anchor=(1.02, 1), loc="upper left")
 
         ax.set_xticks(x_positions)
-        ax.set_xticklabels([get_driver_display_name(session, driver) for driver in driver_order])
+        ax.set_xticklabels(
+            [get_driver_display_name(session, driver) if use_full_names else driver for driver in driver_order]
+        )
         ax.set_ylabel("Lap Number")
         ax.set_title(plot_title or f"{race_title} - Tyre Strategy Overview", fontsize=16)
         ax.grid(axis="y", alpha=0.3)
@@ -1392,6 +1402,7 @@ def main():
             try:
                 tyre_strategy_fig = build_tyre_strategy_comparison_plot(
                     st.session_state["race_session"], race_title
+                    , use_full_names=False
                 )
                 st.pyplot(tyre_strategy_fig)
                 st.caption("Comparison of tyre strategies used by different teams during the race.")
