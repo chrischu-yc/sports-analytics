@@ -29,13 +29,14 @@ def add_plot_tag(fig, tag="@chrischu-yc"):
     )
 
 
+@st.cache_resource(show_spinner=False, max_entries=1, ttl=3600)
 def load_race_session(year: int, race_name: str):
     session = fastf1.get_session(year, race_name, "R")
     session.load()
     return session
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=12, ttl=86400)
 def get_race_options(year: int):
     schedule = fastf1.get_event_schedule(year, include_testing=False)
 
@@ -55,6 +56,14 @@ def get_race_options(year: int):
             ordered_unique_races.append(race)
 
     return ordered_unique_races
+
+
+@st.cache_data(show_spinner=False, max_entries=6, ttl=3600)
+def load_race_bundle(year: int, race_name: str):
+    session = load_race_session(year, race_name)
+    data = compute_race_data(session)
+    race_title = build_race_title(session, year, race_name)
+    return data, race_title
 
 
 def compute_race_data(session):
@@ -975,7 +984,7 @@ def build_driver_telemetry_overview_plot(session, driver_a, driver_b, race_title
         plt.rcdefaults()
 
 
-def build_driver_lap_time_plot(session, driver_a, driver_b, race_title, driver_c=None):
+def build_driver_lap_time_plot(session, driver_a, driver_b, race_title, driver_c=None, safety_car_laps=None):
     plt.rcdefaults()
     fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme="fastf1")
     try:
@@ -988,8 +997,7 @@ def build_driver_lap_time_plot(session, driver_a, driver_b, race_title, driver_c
         driver_markers = {driver: marker_cycle[idx % len(marker_cycle)] for idx, driver in enumerate(driver_order)}
         comparison_label = build_driver_comparison_label(session, driver_order)
 
-        race_data = st.session_state.get("race_data", {})
-        safety_car_laps = race_data.get("safety_car_laps", []) if isinstance(race_data, dict) else []
+        safety_car_laps = safety_car_laps or []
 
         for driver_abbreviation in driver_order:
             driver_laps = session.laps.pick_drivers(driver_abbreviation).pick_quicklaps().reset_index()
@@ -1342,7 +1350,7 @@ def build_driver_gear_shift_comparison_plot(session, driver_a, driver_b, race_ti
         plt.rcdefaults()
 
 
-def build_team_lap_time_plots(session, team_name, race_title):
+def build_team_lap_time_plots(session, team_name, race_title, safety_car_laps=None):
     plt.rcdefaults()
     fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme="fastf1")
     try:
@@ -1416,8 +1424,7 @@ def build_team_lap_time_plots(session, team_name, race_title):
         ]
 
         # Shade Safety Car periods on the lap-number plot if available
-        race_data = st.session_state.get("race_data", {})
-        safety_car_laps = race_data.get("safety_car_laps", []) if isinstance(race_data, dict) else []
+        safety_car_laps = safety_car_laps or []
         try:
             lap_numbers_all = session.laps["LapNumber"].dropna().astype(int)
             lap_min = int(lap_numbers_all.min()) if not lap_numbers_all.empty else 1
@@ -1543,23 +1550,36 @@ def main():
         load_clicked = st.button("Load Race", type="primary", disabled=not race_options)
         if st.button("Help", use_container_width=True, disabled=not race_options):
             show_app_help_dialog()
+        if st.button("Clear Cached Data", use_container_width=True):
+            load_race_session.clear()
+            load_race_bundle.clear()
+            get_race_options.clear()
+            for key in [
+                "race_session",
+                "race_data",
+                "race_title",
+                "race_year",
+                "race_name",
+                "race_key",
+                "team_choice",
+                "selected_abbs",
+                "selected_laps",
+            ]:
+                st.session_state.pop(key, None)
+            st.rerun()
 
     race_key = (int(year), race_name.strip().lower())
     if load_clicked:
         try:
             with st.spinner("Loading session data from FastF1... This could take a moment..."):
-                session = load_race_session(int(year), race_name.strip())
-                data = compute_race_data(session)
+                data, race_title = load_race_bundle(int(year), race_name.strip())
         except Exception as exc:
             st.error(f"Could not load race data: {exc}")
             return
 
-        race_title = build_race_title(session, int(year), race_name.strip())
-
         st.session_state["race_key"] = race_key
-        st.session_state["race_session"] = session
-        st.session_state["race_data"] = data
-        st.session_state["race_title"] = race_title
+        st.session_state["race_year"] = int(year)
+        st.session_state["race_name"] = race_name.strip()
 
         all_abbs = sorted([info["abbreviation"] for info in data["driver_info"].values()])
         min_lap = min(data["lap_numbers"])
@@ -1567,12 +1587,14 @@ def main():
         st.session_state["selected_abbs"] = all_abbs[: min(6, len(all_abbs))]
         st.session_state["selected_laps"] = (min_lap, max_lap)
 
-    if "race_data" not in st.session_state:
+    if "race_key" not in st.session_state:
         st.info("Choose a year and race name, then click Load Race.")
         return
 
-    data = st.session_state["race_data"]
-    race_title = st.session_state["race_title"]
+    race_year = st.session_state["race_year"]
+    race_name_loaded = st.session_state["race_name"]
+    data, race_title = load_race_bundle(race_year, race_name_loaded)
+    race_session = load_race_session(race_year, race_name_loaded)
     st.success(f"{race_title}")
     race_overview_tab, team_specific_tab, driver_comparison_tab = st.tabs(["Race Overview", "Team Specific", "Driver Comparison"])
 
@@ -1582,12 +1604,10 @@ def main():
         st.pyplot(full_fig)
         st.caption("Race trace documents the overall race progression by plotting each driver's cumulative offset from the median race pace lap by lap. The y-axis shows how much faster (positive) or slower (negative) a driver was compared to the median pace of that lap. Dots on the lines indicate pitstops, and yellow shaded areas represent Safety Car periods. Use the filters below to focus on specific drivers or lap ranges.")
 
-        if "race_session" in st.session_state:
+        if "race_year" in st.session_state and "race_name" in st.session_state:
             st.subheader("Team Pace Comparison")
             try:
-                team_pace_fig = build_team_pace_comparison_plot(
-                    st.session_state["race_session"], race_title
-                )
+                team_pace_fig = build_team_pace_comparison_plot(race_session, race_title)
                 st.pyplot(team_pace_fig)
                 st.caption("Box plot showcases each team's 25th, 50th, and 75th percentile lap times. Half of the laps by a team fall within its box, with the median lap time indicated by the line inside the box. Teams are ordered from fastest median lap time to slowest.")
             except Exception as exc:
@@ -1595,10 +1615,7 @@ def main():
 
             st.subheader("Tyre Strategies Comparison")
             try:
-                tyre_strategy_fig = build_tyre_strategy_comparison_plot(
-                    st.session_state["race_session"], race_title
-                    , use_full_names=False
-                )
+                tyre_strategy_fig = build_tyre_strategy_comparison_plot(race_session, race_title, use_full_names=False)
                 st.pyplot(tyre_strategy_fig)
                 st.caption("Comparison of tyre strategies used by different teams during the race.")
             except Exception as exc:
@@ -1647,7 +1664,7 @@ def main():
         st.subheader("Team Specific Visualization")
         st.caption("Select a team to explore its lap and telemetry views.")
 
-        team_options = get_team_options(st.session_state["race_session"])
+        team_options = get_team_options(race_session)
         if not team_options:
             st.info("No team data available for this session.")
         else:
@@ -1669,7 +1686,7 @@ def main():
             st.caption("Compares the two drivers from the selected team on their fastest lap telemetry speed traces.")
             try:
                 fastest_lap_fig = build_team_fastest_lap_comparison_plot(
-                    st.session_state["race_session"], team_name, race_title
+                    race_session, team_name, race_title
                 )
                 st.pyplot(fastest_lap_fig)
             except Exception as exc:
@@ -1679,7 +1696,7 @@ def main():
             st.caption("Shows the selected team's fastest lap on the circuit with speed-colored telemetry and numbered corners.")
             try:
                 track_map_fig = build_team_track_map_plot(
-                    st.session_state["race_session"], team_name, race_title
+                    race_session, team_name, race_title
                 )
                 st.pyplot(track_map_fig)
             except Exception as exc:
@@ -1689,7 +1706,7 @@ def main():
             st.caption("Left: lap time by lap number. Right: lap time by tire age. Marker shape identifies each driver, while color indicates the tire compound.")
             try:
                 lap_time_fig = build_team_lap_time_plots(
-                    st.session_state["race_session"], team_name, race_title
+                    race_session, team_name, race_title, safety_car_laps=data.get("safety_car_laps", [])
                 )
                 st.pyplot(lap_time_fig)
             except Exception as exc:
@@ -1699,7 +1716,7 @@ def main():
         st.subheader("Driver Comparison")
         st.caption("Choose one, two, or three drivers and submit to generate the comparison plots for their telemetry, race performance, and lap data.")
 
-        driver_options = get_driver_options(st.session_state["race_session"])
+        driver_options = get_driver_options(race_session)
         if len(driver_options) < 1:
             st.info("Not enough driver data available for comparison.")
         else:
@@ -1717,7 +1734,7 @@ def main():
             if default_driver_c not in driver_options:
                 default_driver_c = ""
 
-            driver_label = lambda abb: f"{get_driver_display_name(st.session_state['race_session'], abb)} ({get_driver_finish_position(st.session_state['race_session'], abb)})"
+            driver_label = lambda abb: f"{get_driver_display_name(race_session, abb)} ({get_driver_finish_position(race_session, abb)})"
 
             with st.form(f"driver_compare_form_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}"):
                 driver_a = st.selectbox(
@@ -1757,7 +1774,7 @@ def main():
             if selected_drivers:
                 comparison_drivers = list(selected_drivers)
                 comparison_names = [
-                    f"{get_driver_display_name(st.session_state['race_session'], driver)} ({get_driver_finish_position(st.session_state['race_session'], driver)})"
+                    f"{get_driver_display_name(race_session, driver)} ({get_driver_finish_position(race_session, driver)})"
                     for driver in comparison_drivers
                 ]
                 st.markdown(f"#### {' vs '.join(comparison_names)}")
@@ -1778,7 +1795,7 @@ def main():
                 st.caption("Stacked fastest-lap telemetry overview showing speed, RPM, gear number, throttle usage, and brake usage.")
                 try:
                     telemetry_overview_fig = build_driver_telemetry_overview_plot(
-                        st.session_state["race_session"],
+                        race_session,
                         driver_a,
                         driver_b,
                         race_title,
@@ -1790,9 +1807,7 @@ def main():
 
                 st.markdown("##### Fastest Lap Speed Comparison")
                 try:
-                    fastest_lap_compare_fig = build_driver_fastest_lap_comparison_plot(
-                        st.session_state["race_session"], driver_a, driver_b, race_title, driver_c=driver_c
-                    )
+                    fastest_lap_compare_fig = build_driver_fastest_lap_comparison_plot(race_session, driver_a, driver_b, race_title, driver_c=driver_c)
                     st.pyplot(fastest_lap_compare_fig)
                 except Exception as exc:
                     st.warning(f"Could not generate fastest lap comparison: {exc}")
@@ -1800,7 +1815,7 @@ def main():
                 st.markdown("##### Fastest Lap RPM Comparison")
                 try:
                     rpm_compare_fig = build_driver_fastest_lap_metric_plot(
-                        st.session_state["race_session"],
+                        race_session,
                         driver_a,
                         driver_b,
                         race_title,
@@ -1819,7 +1834,7 @@ def main():
                 st.markdown("##### Fastest Lap Throttle Percentage Comparison")
                 try:
                     throttle_compare_fig = build_driver_fastest_lap_metric_plot(
-                        st.session_state["race_session"],
+                        race_session,
                         driver_a,
                         driver_b,
                         race_title,
@@ -1838,7 +1853,7 @@ def main():
                 st.markdown("##### Fastest Lap Brake Usage Comparison")
                 try:
                     brake_compare_fig = build_driver_fastest_lap_metric_plot(
-                        st.session_state["race_session"],
+                        race_session,
                         driver_a,
                         driver_b,
                         race_title,
@@ -1858,7 +1873,7 @@ def main():
                 st.markdown("##### Fastest Lap Gear Number Comparison")
                 try:
                     gear_compare_fig = build_driver_fastest_lap_metric_plot(
-                        st.session_state["race_session"],
+                        race_session,
                         driver_a,
                         driver_b,
                         race_title,
@@ -1878,7 +1893,7 @@ def main():
                 st.caption("Each driver's fastest lap track map colored by gear number.")
                 try:
                     gear_track_map_fig = build_driver_gear_shift_comparison_plot(
-                        st.session_state["race_session"],
+                        race_session,
                         driver_a,
                         driver_b,
                         race_title,
@@ -1891,7 +1906,12 @@ def main():
                 st.markdown("##### Lap Time vs Lap Number")
                 try:
                     lap_time_compare_fig = build_driver_lap_time_plot(
-                        st.session_state["race_session"], driver_a, driver_b, race_title, driver_c=driver_c
+                        race_session,
+                        driver_a,
+                        driver_b,
+                        race_title,
+                        driver_c=driver_c,
+                        safety_car_laps=data.get("safety_car_laps", []),
                     )
                     st.pyplot(lap_time_compare_fig)
                 except Exception as exc:
@@ -1900,10 +1920,10 @@ def main():
                 st.markdown("##### Tyre Strategy Comparison")
                 try:
                     tyre_strategy_compare_fig = build_tyre_strategy_comparison_plot(
-                        st.session_state["race_session"],
+                        race_session,
                         race_title,
                         selected_drivers=comparison_drivers,
-                        plot_title=f"{race_title} - {' vs '.join([get_driver_display_name(st.session_state['race_session'], driver) for driver in comparison_drivers])} - Tyre Strategy Comparison",
+                        plot_title=f"{race_title} - {' vs '.join([get_driver_display_name(race_session, driver) for driver in comparison_drivers])} - Tyre Strategy Comparison",
                     )
                     st.pyplot(tyre_strategy_compare_fig)
                 except Exception as exc:
