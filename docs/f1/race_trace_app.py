@@ -29,6 +29,7 @@ def add_plot_tag(fig, tag="@chrischu-yc"):
     )
 
 
+@st.cache_resource(show_spinner=False)
 def load_race_session(year: int, race_name: str):
     session = fastf1.get_session(year, race_name, "R")
     session.load()
@@ -1549,26 +1550,12 @@ def main():
         try:
             with st.spinner("Loading session data from FastF1... This could take a moment..."):
                 session = load_race_session(int(year), race_name.strip())
+                data = compute_race_data(session)
         except Exception as exc:
-            st.error(f"Could not load race session: {exc}")
+            st.error(f"Could not load race data: {exc}")
             return
 
-        try:
-            data = compute_race_data(session)
-            race_title = build_race_title(session, int(year), race_name.strip())
-        except Exception as exc:
-            if "has not been loaded yet" in str(exc):
-                try:
-                    session = fastf1.get_session(int(year), race_name.strip(), "R")
-                    session.load()
-                    data = compute_race_data(session)
-                    race_title = build_race_title(session, int(year), race_name.strip())
-                except Exception as retry_exc:
-                    st.error(f"Could not load race data after retry: {retry_exc}")
-                    return
-            else:
-                st.error(f"Could not load race data: {exc}")
-                return
+        race_title = build_race_title(session, int(year), race_name.strip())
 
         st.session_state["race_key"] = race_key
         st.session_state["race_session"] = session
