@@ -14,6 +14,7 @@ The app includes a race trace overview with driver pace offsets, pit stop marker
 - Year and race selection with dependent race options.
 - Load-once race sessions with persistent selections in Streamlit.
 - Race trace overview with filtered driver and lap-range views.
+- Qualifying overview and drivers' best laps comparison
 - Team pace comparison boxplots and tyre strategies comparison.
 - Team-specific telemetry, track map, and lap-time charts.
 - Many driver comparison tools, include in-depth telemetry analysis. 

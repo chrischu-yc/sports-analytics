@@ -5,6 +5,7 @@ import matplotlib as mpl
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
+from matplotlib.ticker import FuncFormatter, MaxNLocator
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -29,8 +30,36 @@ def add_plot_tag(fig, tag="@chrischu-yc"):
     )
 
 
+def format_timedelta_mmssmmm(value):
+    if value is None or pd.isna(value):
+        return "NaN"
+
+    delta = pd.to_timedelta(value)
+    total_seconds = float(delta.total_seconds())
+    sign = "-" if total_seconds < 0 else ""
+    total_seconds = abs(total_seconds)
+    minutes = int(total_seconds // 60)
+    seconds = total_seconds % 60
+    return f"{sign}{minutes:02d}:{seconds:06.3f}"
+
+
+def format_seconds_mmm(value):
+    if value is None or pd.isna(value):
+        return ""
+
+    seconds = float(pd.to_timedelta(value).total_seconds())
+    sign = "-" if seconds < 0 else ""
+    return f"{sign}{abs(seconds):05.3f}"
+
+
 def load_race_session(year: int, race_name: str):
     session = fastf1.get_session(year, race_name, "R")
+    session.load()
+    return session
+
+
+def load_quali_session(year: int, race_name: str):
+    session = fastf1.get_session(year, race_name, "Q")
     session.load()
     return session
 
@@ -63,6 +92,14 @@ def load_race_bundle(year: int, race_name: str):
     data = compute_race_data(session)
     race_title = build_race_title(session, year, race_name)
     return data, race_title
+
+
+@st.cache_data(show_spinner=False, max_entries=6, ttl=3600)
+def load_quali_bundle(year: int, race_name: str):
+    session = load_quali_session(year, race_name)
+    results = session.results.copy()
+    quali_title = f"{build_race_title(session, year, race_name)} - Qualifying"
+    return results, quali_title
 
 
 def compute_race_data(session):
@@ -186,6 +223,74 @@ def build_race_title(session, selected_year: int, selected_race_name: str):
             round_text = f" - Round {round_number}"
 
     return f"{meeting_name} {race_year}{round_text}"
+
+
+def build_qualifying_best_lap_plot(results, quali_title):
+    plt.rcdefaults()
+    try:
+        if results.empty:
+            raise ValueError("No qualifying results available to plot.")
+
+        result_data = results.copy()
+        qualifying_time_columns = [column for column in ["Q3", "Q2", "Q1"] if column in result_data.columns]
+        if not qualifying_time_columns:
+            raise ValueError("Qualifying lap time columns were not found.")
+
+        result_data["BestLapTime"] = result_data[qualifying_time_columns].bfill(axis=1).iloc[:, 0]
+        result_data = result_data[result_data["BestLapTime"].notna()].copy()
+        result_data["BestLapDelta"] = result_data["BestLapTime"] - result_data["BestLapTime"].min()
+        result_data = result_data.sort_values(["BestLapDelta", "Position"])
+
+        if result_data.empty:
+            raise ValueError("No qualifying lap times available to plot.")
+
+        best_lap_delta_seconds = result_data["BestLapDelta"].dt.total_seconds()
+        driver_labels = (
+            result_data["Abbreviation"].astype(str)
+            if "Abbreviation" in result_data.columns
+            else result_data["FullName"].astype(str)
+        )
+        team_colors = []
+        for _, row in result_data.iterrows():
+            color_value = str(row.get("TeamColor", "777777")).strip().lstrip("#")
+            color_text = f"#{color_value}" if color_value else "gray"
+            team_colors.append(color_text if mpl.colors.is_color_like(color_text) else "gray")
+
+        fig, ax = plt.subplots(figsize=(14, 8))
+        bars = ax.barh(driver_labels, best_lap_delta_seconds, color=team_colors, edgecolor="black", linewidth=0.6)
+        ax.invert_yaxis()
+        ax.set_xlabel("Delta to Fastest Lap (s)")
+        ax.set_ylabel("")
+        fastest_row = result_data.iloc[0]
+        fastest_lap_time = fastest_row["BestLapTime"]
+        fastest_driver = str(fastest_row.get("Abbreviation", fastest_row.get("FullName", "")))
+        ax.set_title(
+            f"{quali_title}\nFastest Lap: {format_timedelta_mmssmmm(fastest_lap_time)} ({fastest_driver})"
+        )
+        ax.grid(axis="x", alpha=0.2)
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=6))
+        ax.xaxis.set_major_formatter(
+            FuncFormatter(lambda value, _: format_seconds_mmm(pd.to_timedelta(value, unit="s")))
+        )
+
+        x_offset = max(best_lap_delta_seconds.max() * 0.015, 0.02)
+        for bar, delta_seconds in zip(bars, best_lap_delta_seconds.tolist()):
+            if pd.isna(delta_seconds) or abs(float(delta_seconds)) < 1e-9:
+                continue
+            ax.text(
+                bar.get_width() + x_offset,
+                bar.get_y() + bar.get_height() / 2,
+                format_seconds_mmm(pd.to_timedelta(delta_seconds, unit="s")),
+                va="center",
+                ha="left",
+                size="small",
+            )
+
+        add_plot_tag(fig)
+        fig.tight_layout()
+        return fig
+    finally:
+        plt.rcdefaults()
 
 
 def build_plot(data, title, selected_abbs=None, lap_range=None):
@@ -625,6 +730,20 @@ def get_driver_display_name(session, driver_abbreviation):
     return str(driver_abbreviation)
 
 
+def get_driver_team_name(session, driver_abbreviation):
+    row = get_driver_result_row(session, driver_abbreviation)
+    if row is None:
+        return None
+
+    team_name = row.get("TeamName")
+    if pd.notna(team_name):
+        team_name_text = str(team_name).strip()
+        if team_name_text:
+            return team_name_text
+
+    return None
+
+
 def get_driver_team_color(session, driver_abbreviation):
     row = get_driver_result_row(session, driver_abbreviation)
     if row is None:
@@ -636,6 +755,18 @@ def get_driver_team_color(session, driver_abbreviation):
 
     color_text = f"#{color_value}"
     return color_text if mpl.colors.is_color_like(color_text) else "gray"
+
+
+def get_comparison_driver_color(session, driver_abbreviation, used_team_keys=None, fallback_color="thistle"):
+    team_key = get_driver_team_name(session, driver_abbreviation) or str(driver_abbreviation)
+    if used_team_keys is not None and team_key in used_team_keys:
+        return fallback_color
+
+    if used_team_keys is not None:
+        used_team_keys.add(team_key)
+
+    color = get_driver_team_color(session, driver_abbreviation)
+    return color if mpl.colors.is_color_like(color) else fallback_color
 
 
 def build_comparison_driver_order(*drivers):
@@ -736,6 +867,7 @@ def build_driver_fastest_lap_comparison_plot(session, driver_a, driver_b, race_t
         last_car_data = None
         comparison_label = build_driver_comparison_label(session, driver_order)
         line_styles = ["-", "-.", "--", ":"]
+        used_team_keys = set()
 
         for idx, driver_abbreviation in enumerate(driver_order):
             fastest_lap = session.laps.pick_drivers(driver_abbreviation).pick_fastest()
@@ -745,7 +877,7 @@ def build_driver_fastest_lap_comparison_plot(session, driver_a, driver_b, race_t
             lap_time = fastest_lap["LapTime"].total_seconds()
             car_data = fastest_lap.get_car_data().add_distance()
             last_car_data = car_data
-            color = get_driver_team_color(session, driver_abbreviation)
+            color = get_comparison_driver_color(session, driver_abbreviation, used_team_keys)
             style = line_styles[idx % len(line_styles)]
             label = f"{get_driver_display_name(session, driver_abbreviation)} - {lap_time:.3f} s"
             ax.plot(car_data["Distance"], car_data["Speed"], color=color, linestyle=style, label=label)
@@ -812,6 +944,7 @@ def build_driver_fastest_lap_metric_plot(
         comparison_label = build_driver_comparison_label(session, driver_order)
         line_styles = ["-", "-.", "--", ":"]
         all_metric_values = []
+        used_team_keys = set()
 
         for idx, driver_abbreviation in enumerate(driver_order):
             fastest_lap = session.laps.pick_drivers(driver_abbreviation).pick_fastest()
@@ -824,7 +957,7 @@ def build_driver_fastest_lap_metric_plot(
             if not metric_values.empty:
                 all_metric_values.append(metric_values)
 
-            color = get_driver_team_color(session, driver_abbreviation)
+            color = get_comparison_driver_color(session, driver_abbreviation, used_team_keys)
             style = line_styles[idx % len(line_styles)]
             label = f"{get_driver_display_name(session, driver_abbreviation)} - {lap_time:.3f} s"
             ax.plot(car_data["Distance"], car_data[metric_column] * metric_scale, color=color, linestyle=style, label=label)
@@ -891,6 +1024,7 @@ def build_driver_telemetry_overview_plot(session, driver_a, driver_b, race_title
 
         metric_values_by_axis = [[] for _ in metric_specs]
         corner_positions = circuit_info.corners["Distance"]
+        used_team_keys = set()
 
         for idx, driver_abbreviation in enumerate(driver_order):
             fastest_lap = session.laps.pick_drivers(driver_abbreviation).pick_fastest()
@@ -898,7 +1032,7 @@ def build_driver_telemetry_overview_plot(session, driver_a, driver_b, race_title
                 continue
 
             car_data = fastest_lap.get_car_data().add_distance()
-            color = get_driver_team_color(session, driver_abbreviation)
+            color = get_comparison_driver_color(session, driver_abbreviation, used_team_keys)
             style = line_styles[idx % len(line_styles)]
             label = f"{get_driver_display_name(session, driver_abbreviation)}"
 
@@ -995,6 +1129,8 @@ def build_driver_lap_time_plot(session, driver_a, driver_b, race_title, driver_c
         marker_cycle = ["o", "D", "^", "s", "P"]
         driver_markers = {driver: marker_cycle[idx % len(marker_cycle)] for idx, driver in enumerate(driver_order)}
         comparison_label = build_driver_comparison_label(session, driver_order)
+        used_team_keys = set()
+        driver_colors = {}
 
         safety_car_laps = safety_car_laps or []
 
@@ -1007,7 +1143,8 @@ def build_driver_lap_time_plot(session, driver_a, driver_b, race_title, driver_c
             if driver_laps.empty:
                 continue
 
-            driver_color = get_driver_team_color(session, driver_abbreviation)
+            driver_color = get_comparison_driver_color(session, driver_abbreviation, used_team_keys)
+            driver_colors[driver_abbreviation] = driver_color
             sns.scatterplot(
                 data=driver_laps,
                 x="LapNumber",
@@ -1043,7 +1180,7 @@ def build_driver_lap_time_plot(session, driver_a, driver_b, race_title, driver_c
                 linestyle="None",
                 marker=driver_markers[driver_abbreviation],
                 markersize=8,
-                markerfacecolor=get_driver_team_color(session, driver_abbreviation),
+                markerfacecolor=driver_colors.get(driver_abbreviation, get_comparison_driver_color(session, driver_abbreviation)),
                 markeredgecolor="black",
                 label=get_driver_display_name(session, driver_abbreviation),
             )
@@ -1224,6 +1361,150 @@ def build_driver_fastest_lap_track_map_plot(session, driver_abbreviation, race_t
         ax.set_aspect("equal", adjustable="box")
         add_plot_tag(fig)
 
+        return fig
+    finally:
+        plt.rcdefaults()
+
+
+def build_driver_track_dominance_plot(session, driver_a, driver_b, race_title, driver_c=None, num_minisectors=40):
+    plt.rcdefaults()
+    try:
+        circuit_info = session.get_circuit_info()
+        driver_order = build_comparison_driver_order(driver_a, driver_b, driver_c)
+        if len(driver_order) < 1:
+            raise ValueError("Please select at least one driver.")
+
+        driver_data = {}
+        base_driver = None
+        base_telemetry = None
+        used_team_keys = set()
+
+        for driver_abbreviation in driver_order:
+            fastest_lap = session.laps.pick_drivers(driver_abbreviation).pick_fastest()
+            if fastest_lap is None:
+                raise ValueError("Could not find a fastest lap for the selected driver.")
+
+            telemetry = fastest_lap.get_telemetry()
+            required_columns = {"X", "Y", "Distance", "Speed"}
+            if not required_columns.issubset(telemetry.columns):
+                raise ValueError(f"Telemetry does not include the required columns: {', '.join(sorted(required_columns))}.")
+
+            telemetry = telemetry.dropna(subset=["X", "Y", "Distance", "Speed"]).sort_values("Distance").reset_index(drop=True)
+            if telemetry.empty:
+                raise ValueError("No telemetry available for the selected driver.")
+
+            driver_data[driver_abbreviation] = {
+                "driver_name": get_driver_display_name(session, driver_abbreviation),
+                "color": get_comparison_driver_color(session, driver_abbreviation, used_team_keys),
+                "telemetry": telemetry,
+            }
+
+            if base_telemetry is None:
+                base_driver = driver_abbreviation
+                base_telemetry = telemetry
+
+        assert base_driver is not None and base_telemetry is not None
+
+        comparison_label = build_driver_comparison_label(session, driver_order)
+        total_distance = max(float(data["telemetry"]["Distance"].max()) for data in driver_data.values())
+        minisector_edges = np.linspace(0.0, total_distance, num_minisectors + 1)
+
+        dominant_drivers = []
+        for sector_index, (start_edge, end_edge) in enumerate(zip(minisector_edges[:-1], minisector_edges[1:])):
+            sector_speed_data = []
+            for driver_abbreviation in driver_order:
+                telemetry = driver_data[driver_abbreviation]["telemetry"]
+                if sector_index == len(minisector_edges) - 2:
+                    sector_mask = (telemetry["Distance"] >= start_edge) & (telemetry["Distance"] <= end_edge)
+                else:
+                    sector_mask = (telemetry["Distance"] >= start_edge) & (telemetry["Distance"] < end_edge)
+
+                average_speed = telemetry.loc[sector_mask, "Speed"].mean()
+                if pd.notna(average_speed):
+                    sector_speed_data.append((driver_abbreviation, float(average_speed)))
+
+            if not sector_speed_data:
+                dominant_drivers.append("Tie")
+                continue
+
+            max_speed = max(speed for _, speed in sector_speed_data)
+            winners = [driver for driver, speed in sector_speed_data if np.isclose(speed, max_speed, rtol=1e-6, atol=1e-6)]
+            dominant_drivers.append(winners[0] if len(winners) == 1 else "Tie")
+
+        dominant_color_map = {driver_abbreviation: driver_data[driver_abbreviation]["color"] for driver_abbreviation in driver_order}
+        dominant_color_map["Tie"] = "gray"
+
+        def rotate(xy, *, angle):
+            rot_mat = np.array([[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]])
+            return np.matmul(xy, rot_mat)
+
+        track_angle = circuit_info.rotation / 180 * np.pi
+        track = base_telemetry.loc[:, ("X", "Y")].to_numpy()
+        x = base_telemetry["X"].to_numpy()
+        y = base_telemetry["Y"].to_numpy()
+        points = np.array([x, y]).T.reshape(-1, 1, 2)
+        rotated_track = rotate(track, angle=track_angle)
+        rotated_points = rotate(np.array([x, y]).T, angle=track_angle)
+        rotated_segments = np.concatenate([
+            rotated_points[:-1].reshape(-1, 1, 2),
+            rotated_points[1:].reshape(-1, 1, 2),
+        ], axis=1)
+
+        segment_midpoints = (base_telemetry["Distance"].to_numpy()[:-1] + base_telemetry["Distance"].to_numpy()[1:]) / 2.0
+        segment_sector_ids = np.digitize(segment_midpoints, minisector_edges, right=False) - 1
+        segment_sector_ids = np.clip(segment_sector_ids, 0, len(dominant_drivers) - 1)
+        segment_colors = [dominant_color_map[dominant_drivers[sector_id]] for sector_id in segment_sector_ids]
+
+        fig, ax = plt.subplots(sharex=True, sharey=True, figsize=(12, 6.75))
+        fig.suptitle(f"{race_title} - {comparison_label} - Track Dominance", size=18, y=0.97)
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.12)
+        ax.axis("off")
+        ax.plot(
+            rotated_track[:, 0],
+            rotated_track[:, 1],
+            color="black",
+            linestyle="-",
+            linewidth=16,
+            zorder=0,
+        )
+
+        lc = LineCollection(rotated_segments, colors=segment_colors, linestyle="-", linewidth=5)
+        ax.add_collection(lc)
+
+        legend_handles = [
+            mpl.lines.Line2D(
+                [], [],
+                linestyle="-",
+                linewidth=5,
+                color=driver_data[driver_abbreviation]["color"],
+                label=driver_abbreviation,
+            )
+            for driver_abbreviation in driver_order
+        ]
+        if "Tie" in dominant_drivers:
+            legend_handles.append(
+                mpl.lines.Line2D([], [], linestyle="-", linewidth=5, color="gray", label="Tie")
+            )
+        if legend_handles:
+            ax.legend(handles=legend_handles, title="Dominant driver", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+        offset_vector = [500, 0]
+        for _, corner in circuit_info.corners.iterrows():
+            txt = f"{corner['Number']}{corner['Letter']}"
+            offset_angle = corner["Angle"] / 180 * np.pi
+            offset_x, offset_y = rotate(offset_vector, angle=offset_angle)
+            text_x = corner["X"] + offset_x
+            text_y = corner["Y"] + offset_y
+            text_x, text_y = rotate([text_x, text_y], angle=track_angle)
+            track_x, track_y = rotate([corner["X"], corner["Y"]], angle=track_angle)
+            ax.scatter(text_x, text_y, color="grey", s=140)
+            ax.plot([track_x, text_x], [track_y, text_y], color="grey")
+            ax.text(text_x, text_y, txt, va="center_baseline", ha="center", size="small", color="white")
+
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect("equal", adjustable="box")
+        add_plot_tag(fig)
         return fig
     finally:
         plt.rcdefaults()
@@ -1470,8 +1751,9 @@ def show_app_help_dialog():
     st.markdown(
         """
         - **Race Overview** shows the overall race trace, team pace, and tyre strategy comparison.
-        - **Team Specific** focuses on one team and its fastest-lap telemetry views.
+        - **Qualifying** gives you lap time overview and single-lap driver comparison for the qualifying session.
         - **Driver Comparison** lets you see one, two, or three drivers using lap, telemetry, and strategy plots.
+        - **Team Specific** focuses on one team and its fastest-lap telemetry views.
         - The **Telemetry Overview** plot combines speed, RPM, gear, throttle, and brake traces in one view.
         """
     )
@@ -1551,6 +1833,7 @@ def main():
             show_app_help_dialog()
         if st.button("Clear Cached Data", use_container_width=True):
             load_race_bundle.clear()
+            load_quali_bundle.clear()
             get_race_options.clear()
             for key in [
                 "race_session",
@@ -1571,6 +1854,7 @@ def main():
         try:
             with st.spinner("Loading session data from FastF1... This could take a moment..."):
                 data, race_title = load_race_bundle(int(year), race_name.strip())
+                quali_results, quali_title = load_quali_bundle(int(year), race_name.strip())
         except Exception as exc:
             st.error(f"Could not load race data: {exc}")
             return
@@ -1592,9 +1876,10 @@ def main():
     race_year = st.session_state["race_year"]
     race_name_loaded = st.session_state["race_name"]
     data, race_title = load_race_bundle(race_year, race_name_loaded)
+    quali_results, quali_title = load_quali_bundle(race_year, race_name_loaded)
     race_session = load_race_session(race_year, race_name_loaded)
     st.success(f"{race_title}")
-    race_overview_tab, team_specific_tab, driver_comparison_tab = st.tabs(["Race Overview", "Team Specific", "Driver Comparison"])
+    race_overview_tab, quali_tab, driver_comparison_tab, team_specific_tab = st.tabs(["Race Overview", "Qualifying", "Driver Comparison", "Team Specific"])
 
     with race_overview_tab:
         st.subheader("Race Trace")
@@ -1657,10 +1942,129 @@ def main():
         )
         st.pyplot(filtered_fig)
 
+    with quali_tab:
+        st.subheader("Qualifying Overview")
+        st.caption("Gap between each driver and the pole lap time.")
+
+        try:
+            quali_fig = build_qualifying_best_lap_plot(quali_results, quali_title)
+            st.pyplot(quali_fig)
+        except Exception as exc:
+            st.warning(f"Could not generate qualifying overview plot: {exc}")
+
+        st.markdown("##### Qualifying Results")
+        quali_columns = [column for column in ["Position", "FullName", "TeamName", "Q1", "Q2", "Q3", "Status"] if column in quali_results.columns]
+        if quali_columns:
+            display_quali_results = quali_results[quali_columns].sort_values("Position").copy()
+            for column in ["Q1", "Q2", "Q3"]:
+                if column in display_quali_results.columns:
+                    display_quali_results[column] = display_quali_results[column].apply(format_timedelta_mmssmmm)
+            st.dataframe(
+                display_quali_results,
+                use_container_width=True,
+                height=420,
+            )
+        else:
+            st.info("No qualifying results columns were available for this session.")
+
+        st.markdown("---")
+        st.subheader("Best Lap Telemetry Comparison")
+        st.caption("Choose one, two, or three drivers to compare the telemetry from each driver's fastest qualifying lap.")
+
+        quali_session = load_quali_session(race_year, race_name_loaded)
+        quali_driver_options = get_driver_options(quali_session)
+        if len(quali_driver_options) < 1:
+            st.info("Not enough qualifying driver data available for telemetry comparison.")
+        else:
+            quali_compare_state_key = f"quali_compare_selection_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}"
+            default_quali_driver_a = st.session_state.get(f"quali_compare_driver_a_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", quali_driver_options[0])
+            default_quali_driver_b = st.session_state.get(f"quali_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", "")
+            default_quali_driver_c = st.session_state.get(f"quali_compare_driver_c_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", "")
+            if default_quali_driver_a not in quali_driver_options:
+                default_quali_driver_a = quali_driver_options[0]
+            if default_quali_driver_b not in ("", *quali_driver_options):
+                default_quali_driver_b = ""
+            if default_quali_driver_c not in quali_driver_options:
+                default_quali_driver_c = ""
+
+            driver_label = lambda abb: f"{get_driver_display_name(quali_session, abb)} ({get_driver_finish_position(quali_session, abb)})"
+
+            with st.form(f"quali_compare_form_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}"):
+                quali_driver_a = st.selectbox(
+                    "Driver A",
+                    options=quali_driver_options,
+                    index=quali_driver_options.index(default_quali_driver_a),
+                    format_func=driver_label,
+                    key=f"quali_compare_driver_a_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
+                )
+                quali_driver_b = st.selectbox(
+                    "Driver B",
+                    options=[""] + quali_driver_options,
+                    index=([""] + quali_driver_options).index(default_quali_driver_b),
+                    format_func=lambda abb: "None" if abb == "" else driver_label(abb),
+                    key=f"quali_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
+                )
+                quali_driver_c = st.selectbox(
+                    "Driver C (optional)",
+                    options=[""] + quali_driver_options,
+                    index=([""] + quali_driver_options).index(default_quali_driver_c),
+                    format_func=lambda abb: "None" if abb == "" else driver_label(abb),
+                    key=f"quali_compare_driver_c_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
+                )
+                quali_compare_clicked = st.form_submit_button("Compare Drivers")
+
+            if quali_compare_clicked:
+                raw_selected_drivers = [driver for driver in [quali_driver_a, quali_driver_b, quali_driver_c] if driver]
+                comparison_drivers = build_comparison_driver_order(*raw_selected_drivers)
+
+                if len(comparison_drivers) != len(raw_selected_drivers):
+                    st.warning("Please choose different drivers for each slot.")
+                    st.session_state[quali_compare_state_key] = ()
+                else:
+                    st.session_state[quali_compare_state_key] = tuple(comparison_drivers)
+
+            selected_quali_drivers = st.session_state.get(quali_compare_state_key)
+            if selected_quali_drivers:
+                comparison_drivers = list(selected_quali_drivers)
+                comparison_names = [driver_label(driver) for driver in comparison_drivers]
+                st.markdown(f"##### {' vs '.join(comparison_names)}")
+
+                driver_a = comparison_drivers[0]
+                driver_b = comparison_drivers[1] if len(comparison_drivers) > 1 else None
+                driver_c = comparison_drivers[2] if len(comparison_drivers) > 2 else None
+
+                st.markdown("##### Telemetry Overview")
+                st.caption("Stacked fastest-lap telemetry overview showing speed, RPM, gear number, throttle usage, and brake usage for each driver's best qualifying lap.")
+                try:
+                    telemetry_overview_fig = build_driver_telemetry_overview_plot(
+                        quali_session,
+                        driver_a,
+                        driver_b,
+                        quali_title,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(telemetry_overview_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate qualifying telemetry overview: {exc}")
+
+                st.markdown("##### Track Dominance")
+                st.caption("Each minisector is colored by the selected driver's fastest qualifying lap that was quickest through that part of the track.")
+                try:
+                    track_dominance_fig = build_driver_track_dominance_plot(
+                        quali_session,
+                        driver_a,
+                        driver_b,
+                        quali_title,
+                        driver_c=driver_c,
+                    )
+                    st.pyplot(track_dominance_fig)
+                except Exception as exc:
+                    st.warning(f"Could not generate qualifying track dominance: {exc}")
+
 
     with team_specific_tab:
         st.subheader("Team Specific Visualization")
-        st.caption("Select a team to explore its lap and telemetry views.")
+        st.caption("Select a team to explore its lap and telemetry views during the race.")
 
         team_options = get_team_options(race_session)
         if not team_options:
@@ -1712,7 +2116,7 @@ def main():
 
     with driver_comparison_tab:
         st.subheader("Driver Comparison")
-        st.caption("Choose one, two, or three drivers and submit to generate the comparison plots for their telemetry, race performance, and lap data.")
+        st.caption("Choose one, two, or three drivers and submit to generate the comparison plots for their telemetry, race performance, and lap data during the race.")
 
         driver_options = get_driver_options(race_session)
         if len(driver_options) < 1:
