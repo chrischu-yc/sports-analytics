@@ -278,9 +278,9 @@ def build_qualifying_best_lap_plot(results, quali_title):
             if pd.isna(delta_seconds) or abs(float(delta_seconds)) < 1e-9:
                 continue
             ax.text(
-                bar.get_width() + x_offset,
+                bar.get_width() + x_offset - 0.01,
                 bar.get_y() + bar.get_height() / 2,
-                format_seconds_mmm(pd.to_timedelta(delta_seconds, unit="s")),
+                f"+{format_seconds_mmm(pd.to_timedelta(delta_seconds, unit='s'))}",
                 va="center",
                 ha="left",
                 size="small",
