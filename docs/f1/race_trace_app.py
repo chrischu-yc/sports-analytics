@@ -1039,7 +1039,7 @@ def build_driver_telemetry_overview_plot(session, driver_a, driver_b, race_title
             for axis_index, (metric_column, y_label, low_padding, high_padding, corner_label_offset) in enumerate(metric_specs):
                 axis = axes[axis_index]
                 metric_series = car_data[metric_column]
-                if metric_column in {"Throttle", "Brake"}:
+                if metric_column in {"Brake"}:
                     metric_series = metric_series * 100.0
 
                 metric_values = metric_series.dropna()
@@ -1072,7 +1072,7 @@ def build_driver_telemetry_overview_plot(session, driver_a, driver_b, race_title
             if axis_index < len(metric_specs) - 1:
                 axis.tick_params(labelbottom=False)
 
-            axis.legend(loc="upper right")
+            axis.legend(loc="lower right")
 
         axes[-1].set_xlabel("Distance in m")
         fig.canvas.draw()
