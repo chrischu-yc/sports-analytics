@@ -1779,6 +1779,130 @@ def show_app_help_dialog():
     st.info("Close this guide with the button in the top-right corner.")
 
 
+def render_qualifying_tab_content(quali_results, quali_title, race_year, race_name_loaded, has_quali_data):
+    st.subheader("Qualifying Overview")
+    st.caption("Gap between each driver and the pole lap time.")
+
+    if not has_quali_data or quali_results is None:
+        st.info("Qualifying data is not available for this event.")
+        return
+
+    try:
+        quali_fig = build_qualifying_best_lap_plot(quali_results, quali_title)
+        st.pyplot(quali_fig)
+    except Exception as exc:
+        st.warning(f"Could not generate qualifying overview plot: {exc}")
+
+    st.markdown("##### Qualifying Results")
+    quali_columns = [column for column in ["Position", "FullName", "TeamName", "Q1", "Q2", "Q3", "Status"] if column in quali_results.columns]
+    if quali_columns:
+        display_quali_results = quali_results[quali_columns].sort_values("Position").copy()
+        for column in ["Q1", "Q2", "Q3"]:
+            if column in display_quali_results.columns:
+                display_quali_results[column] = display_quali_results[column].apply(format_timedelta_mmssmmm)
+        st.dataframe(
+            display_quali_results,
+            use_container_width=True,
+            height=420,
+        )
+    else:
+        st.info("No qualifying results columns were available for this session.")
+
+    st.markdown("---")
+    st.subheader("Best Lap Telemetry Comparison")
+    st.caption("Choose one, two, or three drivers to compare the telemetry from each driver's fastest qualifying lap.")
+
+    quali_session = load_quali_session(race_year, race_name_loaded)
+    quali_driver_options = get_driver_options(quali_session)
+    if len(quali_driver_options) < 1:
+        st.info("Not enough qualifying driver data available for telemetry comparison.")
+    else:
+        quali_compare_state_key = f"quali_compare_selection_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}"
+        default_quali_driver_a = st.session_state.get(f"quali_compare_driver_a_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", quali_driver_options[0])
+        default_quali_driver_b = st.session_state.get(f"quali_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", "")
+        default_quali_driver_c = st.session_state.get(f"quali_compare_driver_c_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", "")
+        if default_quali_driver_a not in quali_driver_options:
+            default_quali_driver_a = quali_driver_options[0]
+        if default_quali_driver_b not in ("", *quali_driver_options):
+            default_quali_driver_b = ""
+        if default_quali_driver_c not in quali_driver_options:
+            default_quali_driver_c = ""
+
+        driver_label = lambda abb: f"{get_driver_display_name(quali_session, abb)} ({get_driver_finish_position(quali_session, abb)})"
+
+        with st.form(f"quali_compare_form_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}"):
+            quali_driver_a = st.selectbox(
+                "Driver A",
+                options=quali_driver_options,
+                index=quali_driver_options.index(default_quali_driver_a),
+                format_func=driver_label,
+                key=f"quali_compare_driver_a_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
+            )
+            quali_driver_b = st.selectbox(
+                "Driver B",
+                options=[""] + quali_driver_options,
+                index=([""] + quali_driver_options).index(default_quali_driver_b),
+                format_func=lambda abb: "None" if abb == "" else driver_label(abb),
+                key=f"quali_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
+            )
+            quali_driver_c = st.selectbox(
+                "Driver C (optional)",
+                options=[""] + quali_driver_options,
+                index=([""] + quali_driver_options).index(default_quali_driver_c),
+                format_func=lambda abb: "None" if abb == "" else driver_label(abb),
+                key=f"quali_compare_driver_c_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
+            )
+            quali_compare_clicked = st.form_submit_button("Compare Drivers")
+
+        if quali_compare_clicked:
+            raw_selected_drivers = [driver for driver in [quali_driver_a, quali_driver_b, quali_driver_c] if driver]
+            comparison_drivers = build_comparison_driver_order(*raw_selected_drivers)
+
+            if len(comparison_drivers) != len(raw_selected_drivers):
+                st.warning("Please choose different drivers for each slot.")
+                st.session_state[quali_compare_state_key] = ()
+            else:
+                st.session_state[quali_compare_state_key] = tuple(comparison_drivers)
+
+        selected_quali_drivers = st.session_state.get(quali_compare_state_key)
+        if selected_quali_drivers:
+            comparison_drivers = list(selected_quali_drivers)
+            comparison_names = [driver_label(driver) for driver in comparison_drivers]
+            st.markdown(f"#### {' vs '.join(comparison_names)}")
+
+            driver_a = comparison_drivers[0]
+            driver_b = comparison_drivers[1] if len(comparison_drivers) > 1 else None
+            driver_c = comparison_drivers[2] if len(comparison_drivers) > 2 else None
+
+            st.markdown("##### Telemetry Overview")
+            st.caption("Stacked fastest-lap telemetry overview showing speed, RPM, gear number, throttle usage, and brake usage for each driver's best qualifying lap.")
+            try:
+                telemetry_overview_fig = build_driver_telemetry_overview_plot(
+                    quali_session,
+                    driver_a,
+                    driver_b,
+                    quali_title,
+                    driver_c=driver_c,
+                )
+                st.pyplot(telemetry_overview_fig)
+            except Exception as exc:
+                st.warning(f"Could not generate qualifying telemetry overview: {exc}")
+
+            st.markdown("##### Track Dominance")
+            st.caption("Each minisector is colored by the selected driver's fastest qualifying lap that was quickest through that part of the track.")
+            try:
+                track_dominance_fig = build_driver_track_dominance_plot(
+                    quali_session,
+                    driver_a,
+                    driver_b,
+                    quali_title,
+                    driver_c=driver_c,
+                )
+                st.pyplot(track_dominance_fig)
+            except Exception as exc:
+                st.warning(f"Could not generate qualifying track dominance: {exc}")
+
+
 def main():
     st.set_page_config(page_title="F1 Race Trace App", layout="wide")
     st.title("F1 Race Trace App")
@@ -1839,6 +1963,10 @@ def main():
                 "race_session",
                 "race_data",
                 "race_title",
+                "quali_results",
+                "quali_title",
+                "has_race_data",
+                "has_quali_data",
                 "race_year",
                 "race_name",
                 "race_key",
@@ -1851,32 +1979,72 @@ def main():
 
     race_key = (int(year), race_name.strip().lower())
     if load_clicked:
-        try:
-            with st.spinner("Loading session data from FastF1... This could take a moment..."):
-                data, race_title = load_race_bundle(int(year), race_name.strip())
-                quali_results, quali_title = load_quali_bundle(int(year), race_name.strip())
-        except Exception as exc:
-            st.error(f"Could not load race data: {exc}")
+        race_loaded = False
+        quali_loaded = False
+        race_error = None
+        quali_error = None
+        race_bundle_data = None
+
+        with st.spinner("Loading session data from FastF1... This could take a moment..."):
+            try:
+                race_bundle_data, _ = load_race_bundle(int(year), race_name.strip())
+                race_loaded = True
+            except Exception as exc:
+                race_error = exc
+
+            try:
+                load_quali_bundle(int(year), race_name.strip())
+                quali_loaded = True
+            except Exception as exc:
+                quali_error = exc
+
+        if not race_loaded and not quali_loaded:
+            messages = [str(exc) for exc in [race_error, quali_error] if exc is not None]
+            st.error(f"Could not load session data: {'; '.join(messages)}")
             return
 
         st.session_state["race_key"] = race_key
         st.session_state["race_year"] = int(year)
         st.session_state["race_name"] = race_name.strip()
+        st.session_state["has_race_data"] = race_loaded
+        st.session_state["has_quali_data"] = quali_loaded
 
-        all_abbs = sorted([info["abbreviation"] for info in data["driver_info"].values()])
-        min_lap = min(data["lap_numbers"])
-        max_lap = max(data["lap_numbers"])
-        st.session_state["selected_abbs"] = all_abbs[: min(6, len(all_abbs))]
-        st.session_state["selected_laps"] = (min_lap, max_lap)
+        if race_loaded:
+            all_abbs = sorted([info["abbreviation"] for info in race_bundle_data["driver_info"].values()])
+            min_lap = min(race_bundle_data["lap_numbers"])
+            max_lap = max(race_bundle_data["lap_numbers"])
+            st.session_state["selected_abbs"] = all_abbs[: min(6, len(all_abbs))]
+            st.session_state["selected_laps"] = (min_lap, max_lap)
+        else:
+            st.session_state.pop("selected_abbs", None)
+            st.session_state.pop("selected_laps", None)
 
     if "race_key" not in st.session_state:
-        st.info("Choose a year and race name, then click Load Race.")
+        st.info("Choose a year and race name at the sidebar, then click Load Race.")
         return
 
     race_year = st.session_state["race_year"]
     race_name_loaded = st.session_state["race_name"]
+    has_race_data = st.session_state.get("has_race_data", False)
+    has_quali_data = st.session_state.get("has_quali_data", False)
+    quali_results = None
+    quali_title = None
+    if has_quali_data:
+        quali_results, quali_title = load_quali_bundle(race_year, race_name_loaded)
+
+    if not has_race_data:
+        if has_quali_data:
+            st.success(f"{quali_title}")
+            st.warning("Race session data is not available for this event, so only the Qualifying tab is shown.")
+        else:
+            st.warning(f"Qualifying data is not available for {race_name_loaded} {race_year}.")
+
+        quali_tab = st.tabs(["Qualifying"])[0]
+        with quali_tab:
+            render_qualifying_tab_content(quali_results, quali_title, race_year, race_name_loaded, has_quali_data)
+        return
+
     data, race_title = load_race_bundle(race_year, race_name_loaded)
-    quali_results, quali_title = load_quali_bundle(race_year, race_name_loaded)
     race_session = load_race_session(race_year, race_name_loaded)
     st.success(f"{race_title}")
     race_overview_tab, quali_tab, driver_comparison_tab, team_specific_tab = st.tabs(["Race Overview", "Qualifying", "Driver Comparison", "Team Specific"])
@@ -1943,123 +2111,7 @@ def main():
         st.pyplot(filtered_fig)
 
     with quali_tab:
-        st.subheader("Qualifying Overview")
-        st.caption("Gap between each driver and the pole lap time.")
-
-        try:
-            quali_fig = build_qualifying_best_lap_plot(quali_results, quali_title)
-            st.pyplot(quali_fig)
-        except Exception as exc:
-            st.warning(f"Could not generate qualifying overview plot: {exc}")
-
-        st.markdown("##### Qualifying Results")
-        quali_columns = [column for column in ["Position", "FullName", "TeamName", "Q1", "Q2", "Q3", "Status"] if column in quali_results.columns]
-        if quali_columns:
-            display_quali_results = quali_results[quali_columns].sort_values("Position").copy()
-            for column in ["Q1", "Q2", "Q3"]:
-                if column in display_quali_results.columns:
-                    display_quali_results[column] = display_quali_results[column].apply(format_timedelta_mmssmmm)
-            st.dataframe(
-                display_quali_results,
-                use_container_width=True,
-                height=420,
-            )
-        else:
-            st.info("No qualifying results columns were available for this session.")
-
-        st.markdown("---")
-        st.subheader("Best Lap Telemetry Comparison")
-        st.caption("Choose one, two, or three drivers to compare the telemetry from each driver's fastest qualifying lap.")
-
-        quali_session = load_quali_session(race_year, race_name_loaded)
-        quali_driver_options = get_driver_options(quali_session)
-        if len(quali_driver_options) < 1:
-            st.info("Not enough qualifying driver data available for telemetry comparison.")
-        else:
-            quali_compare_state_key = f"quali_compare_selection_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}"
-            default_quali_driver_a = st.session_state.get(f"quali_compare_driver_a_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", quali_driver_options[0])
-            default_quali_driver_b = st.session_state.get(f"quali_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", "")
-            default_quali_driver_c = st.session_state.get(f"quali_compare_driver_c_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}", "")
-            if default_quali_driver_a not in quali_driver_options:
-                default_quali_driver_a = quali_driver_options[0]
-            if default_quali_driver_b not in ("", *quali_driver_options):
-                default_quali_driver_b = ""
-            if default_quali_driver_c not in quali_driver_options:
-                default_quali_driver_c = ""
-
-            driver_label = lambda abb: f"{get_driver_display_name(quali_session, abb)} ({get_driver_finish_position(quali_session, abb)})"
-
-            with st.form(f"quali_compare_form_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}"):
-                quali_driver_a = st.selectbox(
-                    "Driver A",
-                    options=quali_driver_options,
-                    index=quali_driver_options.index(default_quali_driver_a),
-                    format_func=driver_label,
-                    key=f"quali_compare_driver_a_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
-                )
-                quali_driver_b = st.selectbox(
-                    "Driver B",
-                    options=[""] + quali_driver_options,
-                    index=([""] + quali_driver_options).index(default_quali_driver_b),
-                    format_func=lambda abb: "None" if abb == "" else driver_label(abb),
-                    key=f"quali_compare_driver_b_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
-                )
-                quali_driver_c = st.selectbox(
-                    "Driver C (optional)",
-                    options=[""] + quali_driver_options,
-                    index=([""] + quali_driver_options).index(default_quali_driver_c),
-                    format_func=lambda abb: "None" if abb == "" else driver_label(abb),
-                    key=f"quali_compare_driver_c_{st.session_state['race_key'][0]}_{st.session_state['race_key'][1]}",
-                )
-                quali_compare_clicked = st.form_submit_button("Compare Drivers")
-
-            if quali_compare_clicked:
-                raw_selected_drivers = [driver for driver in [quali_driver_a, quali_driver_b, quali_driver_c] if driver]
-                comparison_drivers = build_comparison_driver_order(*raw_selected_drivers)
-
-                if len(comparison_drivers) != len(raw_selected_drivers):
-                    st.warning("Please choose different drivers for each slot.")
-                    st.session_state[quali_compare_state_key] = ()
-                else:
-                    st.session_state[quali_compare_state_key] = tuple(comparison_drivers)
-
-            selected_quali_drivers = st.session_state.get(quali_compare_state_key)
-            if selected_quali_drivers:
-                comparison_drivers = list(selected_quali_drivers)
-                comparison_names = [driver_label(driver) for driver in comparison_drivers]
-                st.markdown(f"##### {' vs '.join(comparison_names)}")
-
-                driver_a = comparison_drivers[0]
-                driver_b = comparison_drivers[1] if len(comparison_drivers) > 1 else None
-                driver_c = comparison_drivers[2] if len(comparison_drivers) > 2 else None
-
-                st.markdown("##### Telemetry Overview")
-                st.caption("Stacked fastest-lap telemetry overview showing speed, RPM, gear number, throttle usage, and brake usage for each driver's best qualifying lap.")
-                try:
-                    telemetry_overview_fig = build_driver_telemetry_overview_plot(
-                        quali_session,
-                        driver_a,
-                        driver_b,
-                        quali_title,
-                        driver_c=driver_c,
-                    )
-                    st.pyplot(telemetry_overview_fig)
-                except Exception as exc:
-                    st.warning(f"Could not generate qualifying telemetry overview: {exc}")
-
-                st.markdown("##### Track Dominance")
-                st.caption("Each minisector is colored by the selected driver's fastest qualifying lap that was quickest through that part of the track.")
-                try:
-                    track_dominance_fig = build_driver_track_dominance_plot(
-                        quali_session,
-                        driver_a,
-                        driver_b,
-                        quali_title,
-                        driver_c=driver_c,
-                    )
-                    st.pyplot(track_dominance_fig)
-                except Exception as exc:
-                    st.warning(f"Could not generate qualifying track dominance: {exc}")
+        render_qualifying_tab_content(quali_results, quali_title, race_year, race_name_loaded, has_quali_data)
 
 
     with team_specific_tab:
