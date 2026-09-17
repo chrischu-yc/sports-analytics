@@ -1,3 +1,1 @@
-{
-  "rewrites": [{ "source": "/api/f1", "destination": "/api/f1.py" }]
-}
+{}

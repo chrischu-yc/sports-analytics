@@ -1,7 +1,6 @@
 from datetime import datetime
 import json
-from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs
 
 import fastf1
 
@@ -101,13 +100,16 @@ def _request_data(query):
         return 502, {"error": f"FastF1 could not load this request: {exc}"}
 
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        status, payload = _request_data(parse_qs(urlparse(self.path).query))
-        body = json.dumps(payload).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(body)
+def app(environ, start_response):
+    query = parse_qs(environ.get("QUERY_STRING", ""))
+    status, payload = _request_data(query)
+    body = json.dumps(payload).encode("utf-8")
+    status_line = f"{status} {'OK' if status < 400 else 'Bad Request'}"
+    headers = [
+        ("Content-Type", "application/json"),
+        ("Content-Length", str(len(body))),
+        ("Cache-Control", "no-store"),
+        ("Access-Control-Allow-Origin", "*"),
+    ]
+    start_response(status_line, headers)
+    return [body]
