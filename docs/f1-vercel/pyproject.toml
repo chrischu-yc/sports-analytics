@@ -1,2 +1,7 @@
+[project]
+name = "f1-race-trace-vercel"
+version = "0.1.0"
+requires-python = ">=3.12"
+
 [tool.vercel]
 entrypoint = "api.f1:app"
