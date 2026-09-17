@@ -16,6 +16,8 @@ import streamlit as st
 #os.makedirs(CACHE_DIR, exist_ok=True)
 #fastf1.Cache.enable_cache(CACHE_DIR)
 fastf1.Cache.set_disabled()
+# FastF1 3.8.1 otherwise initializes its default disk cache on the first request.
+fastf1.Cache._default_cache_enabled = True
 
 def add_plot_tag(fig, tag="@chrischu-yc"):
     fig.text(
@@ -84,7 +86,6 @@ def _get_event_identifier(year: int, race_name: str):
     return race_name
 
 
-@st.cache_data(show_spinner=False, max_entries=12, ttl=86400)
 def get_race_options(year: int):
     schedule = fastf1.get_event_schedule(year, include_testing=False)
 
@@ -106,7 +107,6 @@ def get_race_options(year: int):
     return ordered_unique_races
 
 
-@st.cache_data(show_spinner=False, max_entries=6, ttl=3600)
 def load_race_bundle(year: int, race_name: str):
     session = load_race_session(year, race_name)
     data = compute_race_data(session)
@@ -114,10 +114,9 @@ def load_race_bundle(year: int, race_name: str):
     return data, race_title
 
 
-@st.cache_data(show_spinner=False, max_entries=6, ttl=3600)
 def load_quali_bundle(year: int, race_name: str):
     session = load_quali_session(year, race_name)
-    results = session.results.copy(deep=True)
+    results = pd.DataFrame(session.results).copy(deep=True)
     quali_title = f"{build_race_title(session, year, race_name)} - Qualifying"
     return results, quali_title
 
@@ -1975,10 +1974,7 @@ def main():
         load_clicked = st.button("Load Race", type="primary", disabled=not race_options)
         if st.button("Help", use_container_width=True, disabled=not race_options):
             show_app_help_dialog()
-        if st.button("Clear Cached Data", use_container_width=True):
-            load_race_bundle.clear()
-            load_quali_bundle.clear()
-            get_race_options.clear()
+        if st.button("Reset App State", use_container_width=True):
             for key in [
                 "race_session",
                 "race_data",
