@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1117" />
+    <title>F1 Race Trace</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-mark"><span>F1</span><small>RACE TRACE</small></div>
+        <div class="sidebar-rule"></div>
+        <p class="eyebrow">Session control</p>
+        <label for="year">Championship year</label>
+        <select id="year" aria-label="Championship year"></select>
+        <label for="race">Grand Prix</label>
+        <select id="race" aria-label="Grand Prix" disabled></select>
+        <button id="load-race" class="primary-button" disabled>Load race <span>↗</span></button>
+        <p class="sidebar-note">Live data is requested from FastF1 when you load a session. Nothing is persisted by this frontend.</p>
+        <div class="sidebar-footer">Powered by FastF1<br />A Vercel experiment</div>
+      </aside>
+
+      <section class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Formula 1 / telemetry lab</p>
+            <h1>Race Trace <span>///</span></h1>
+          </div>
+          <div id="status" class="status-pill"><i></i><span>Choose a session</span></div>
+        </header>
+
+        <div id="notice" class="notice" role="status">Select a season and Grand Prix to begin.</div>
+
+        <section class="hero-panel">
+          <div>
+            <p class="eyebrow">Selected session</p>
+            <h2 id="session-title">No race loaded</h2>
+            <p id="session-subtitle">Your race overview will appear here.</p>
+          </div>
+          <div class="hero-stripe" aria-hidden="true"><b>01</b><b>02</b><b>03</b><b>04</b></div>
+        </section>
+
+        <section class="metric-grid" aria-label="Session metrics">
+          <article class="metric"><span>Drivers classified</span><strong id="driver-count">--</strong><em>RESULTS</em></article>
+          <article class="metric"><span>Timed laps</span><strong id="lap-count">--</strong><em>LAPS</em></article>
+          <article class="metric accent"><span>Fastest recorded lap</span><strong id="fastest-driver">--</strong><em id="fastest-time">Awaiting data</em></article>
+        </section>
+
+        <nav class="tabs" aria-label="Race views">
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="results">Results</button>
+          <button class="tab" data-tab="about">Data status</button>
+        </nav>
+
+        <section id="overview" class="tab-panel active">
+          <div class="section-heading"><div><p class="eyebrow">Pace progression</p><h3>Race overview</h3></div><span class="section-index">01 / 03</span></div>
+          <div class="trace-placeholder"><div class="trace-grid"></div><div class="trace-line"></div><span class="trace-label">RACE TRACE VISUALIZATION</span><span class="trace-axis axis-left">FASTER</span><span class="trace-axis axis-bottom">LAP DISTANCE</span></div>
+        </section>
+
+        <section id="results" class="tab-panel">
+          <div class="section-heading"><div><p class="eyebrow">Classification</p><h3>Top ten results</h3></div><span class="section-index">02 / 03</span></div>
+          <div class="table-wrap"><table><thead><tr><th>Pos</th><th>Driver</th><th>Name</th><th>Team</th></tr></thead><tbody id="results-body"><tr><td colspan="4" class="empty-cell">Load a race to see results.</td></tr></tbody></table></div>
+        </section>
+
+        <section id="about" class="tab-panel">
+          <div class="section-heading"><div><p class="eyebrow">Runtime diagnostics</p><h3>Data status</h3></div><span class="section-index">03 / 03</span></div>
+          <div class="data-card"><span class="data-dot"></span><div><strong>Ephemeral requests</strong><p>The Vercel function requests FastF1 data per session and sends JSON to this page. No FastF1 disk cache is enabled.</p></div></div>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
