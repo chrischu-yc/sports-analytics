@@ -1,4 +1,6 @@
 from datetime import datetime
+import os
+import tempfile
 import fastf1
 import fastf1.plotting
 import matplotlib as mpl
@@ -10,11 +12,11 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-#CACHE_DIR = os.path.join(os.path.dirname(__file__), ".fastf1-cache")
-# Use /tmp so the app works in ephemeral cloud environments like Streamlit Community Cloud.
-#CACHE_DIR = os.path.join(tempfile.gettempdir(), "fastf1-cache")
-#os.makedirs(CACHE_DIR, exist_ok=True)
-#fastf1.Cache.enable_cache(CACHE_DIR)
+# Use a writable cache directory so FastF1 works in ephemeral environments such as
+# Streamlit Community Cloud and does not depend on the host user's home directory.
+CACHE_DIR = os.path.join(tempfile.gettempdir(), "fastf1-cache")
+os.makedirs(CACHE_DIR, exist_ok=True)
+fastf1.Cache.enable_cache(CACHE_DIR)
 
 
 def add_plot_tag(fig, tag="@chrischu-yc"):
@@ -53,15 +55,27 @@ def format_seconds_mmm(value):
 
 
 def load_race_session(year: int, race_name: str):
-    session = fastf1.get_session(year, race_name, "R")
+    session = fastf1.get_session(year, _get_event_identifier(year, race_name), "R")
     session.load()
     return session
 
 
 def load_quali_session(year: int, race_name: str):
-    session = fastf1.get_session(year, race_name, "Q")
+    session = fastf1.get_session(year, _get_event_identifier(year, race_name), "Q")
     session.load()
     return session
+
+
+def _get_event_identifier(year: int, race_name: str):
+    schedule = fastf1.get_event_schedule(year, include_testing=False)
+    matching_events = schedule[schedule["EventName"].astype(str) == race_name]
+    if not matching_events.empty:
+        round_number = pd.to_numeric(
+            matching_events.iloc[0].get("RoundNumber"), errors="coerce"
+        )
+        if pd.notna(round_number) and round_number > 0:
+            return int(round_number)
+    return race_name
 
 
 @st.cache_data(show_spinner=False, max_entries=12, ttl=86400)
