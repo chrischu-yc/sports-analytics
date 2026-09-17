@@ -1,6 +1,4 @@
 from datetime import datetime
-import os
-import tempfile
 import fastf1
 import fastf1.plotting
 import matplotlib as mpl
@@ -12,12 +10,12 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-# Use a writable cache directory so FastF1 works in ephemeral environments such as
-# Streamlit Community Cloud and does not depend on the host user's home directory.
-CACHE_DIR = os.path.join(tempfile.gettempdir(), "fastf1-cache")
-os.makedirs(CACHE_DIR, exist_ok=True)
-fastf1.Cache.enable_cache(CACHE_DIR)
-
+#CACHE_DIR = os.path.join(os.path.dirname(__file__), ".fastf1-cache")
+# Use /tmp so the app works in ephemeral cloud environments like Streamlit Community Cloud.
+#CACHE_DIR = os.path.join(tempfile.gettempdir(), "fastf1-cache")
+#os.makedirs(CACHE_DIR, exist_ok=True)
+#fastf1.Cache.enable_cache(CACHE_DIR)
+fastf1.Cache.set_disabled()
 
 def add_plot_tag(fig, tag="@chrischu-yc"):
     fig.text(
@@ -55,14 +53,22 @@ def format_seconds_mmm(value):
 
 
 def load_race_session(year: int, race_name: str):
-    session = fastf1.get_session(year, _get_event_identifier(year, race_name), "R")
-    session.load()
-    return session
+    return _load_session(year, race_name, "R")
 
 
 def load_quali_session(year: int, race_name: str):
-    session = fastf1.get_session(year, _get_event_identifier(year, race_name), "Q")
+    return _load_session(year, race_name, "Q")
+
+
+def _load_session(year: int, race_name: str, session_type: str):
+    session = fastf1.get_session(year, _get_event_identifier(year, race_name), session_type)
     session.load()
+
+    # Force the properties used by the app while the session is known to be loaded.
+    session.results
+    session.session_info
+    if session_type == "R":
+        session.laps
     return session
 
 
@@ -111,7 +117,7 @@ def load_race_bundle(year: int, race_name: str):
 @st.cache_data(show_spinner=False, max_entries=6, ttl=3600)
 def load_quali_bundle(year: int, race_name: str):
     session = load_quali_session(year, race_name)
-    results = session.results.copy()
+    results = session.results.copy(deep=True)
     quali_title = f"{build_race_title(session, year, race_name)} - Qualifying"
     return results, quali_title
 
