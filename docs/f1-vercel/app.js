@@ -29,7 +29,7 @@ async function loadRaces() {
   loadButton.disabled = true;
   setStatus("Loading calendar", true);
   try {
-    const response = await fetch(`/api/f1?action=races&year=${yearSelect.value}`);
+    const response = await fetch(`/api?action=races&year=${yearSelect.value}`);
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Could not load the calendar.");
     raceSelect.replaceChildren(...payload.races.map((race) => new Option(`${race.round.toString().padStart(2, "0")}  ${race.name}`, race.name)));
@@ -50,7 +50,7 @@ async function loadSummary() {
   setStatus("Loading FastF1", true);
   setNotice("Fetching the race session. This can take a moment...");
   try {
-    const response = await fetch(`/api/f1?action=summary&year=${year}&race=${encodeURIComponent(race)}`);
+    const response = await fetch(`/api?action=summary&year=${year}&race=${encodeURIComponent(race)}`);
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Could not load this session.");
     renderSummary(payload);

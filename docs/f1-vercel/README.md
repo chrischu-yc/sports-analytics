@@ -10,7 +10,7 @@ From this directory:
 python -m http.server 8000
 ```
 
-The static page will open, but `/api/f1` requires the Vercel Python runtime. For a full local test, use the Vercel CLI or deploy a preview.
+The static page will open, but `/api` requires the Vercel Python runtime. For a full local test, use the Vercel CLI or deploy a preview.
 
 ## Vercel deployment
 
